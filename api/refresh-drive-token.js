@@ -1,10 +1,12 @@
 const { createClient } = require('@supabase/supabase-js')
+const WebSocket = require('ws')
 
 const ADMIN_EMAIL = 'ah.harish@gmail.com'
 
 const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { global: { WebSocket } }
 )
 
 module.exports = async (req, res) => {
@@ -15,20 +17,30 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
-    // Get admin user id
-    const { data: users } = await supabase.from('profiles').select('id').eq('email', ADMIN_EMAIL).single()
-    if (!users) return res.status(404).json({ error: 'Admin user not found' })
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', ADMIN_EMAIL)
+      .single()
 
-    // Get stored refresh token
-    const { data: tokenRow } = await supabase.from('drive_tokens').select('*').eq('user_id', users.id).single()
-    if (!tokenRow?.refresh_token) return res.status(404).json({ error: 'No refresh token stored' })
+    if (profileError || !profile) {
+      return res.status(404).json({ error: 'Admin user not found', detail: profileError?.message })
+    }
 
-    // Check if token is still valid
+    const { data: tokenRow, error: tokenError } = await supabase
+      .from('drive_tokens')
+      .select('*')
+      .eq('user_id', profile.id)
+      .single()
+
+    if (tokenError || !tokenRow?.refresh_token) {
+      return res.status(404).json({ error: 'No Drive token stored. Sign in with Google first.', detail: tokenError?.message })
+    }
+
     if (tokenRow.access_token && tokenRow.expires_at && new Date(tokenRow.expires_at) > new Date(Date.now() + 60000)) {
       return res.status(200).json({ access_token: tokenRow.access_token })
     }
 
-    // Refresh the token
     const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -41,13 +53,14 @@ module.exports = async (req, res) => {
     })
 
     const tokens = await refreshRes.json()
-    if (!tokens.access_token) return res.status(500).json({ error: 'Token refresh failed', details: tokens })
+    if (!tokens.access_token) {
+      return res.status(500).json({ error: 'Token refresh failed', details: tokens })
+    }
 
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
-    // Store updated token
     await supabase.from('drive_tokens').upsert({
-      user_id: users.id,
+      user_id: profile.id,
       access_token: tokens.access_token,
       refresh_token: tokenRow.refresh_token,
       expires_at: expiresAt,
