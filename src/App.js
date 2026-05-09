@@ -8,19 +8,28 @@ import './App.css'
 const ADMIN_EMAIL = 'ah.harish@gmail.com'
 
 async function storeAdminDriveToken(session) {
-  if (!session?.user?.email === ADMIN_EMAIL) return
+  if (!session?.user?.email) return
   if (session.user.email !== ADMIN_EMAIL) return
   const providerToken = session.provider_token
   const providerRefreshToken = session.provider_refresh_token
-  if (!providerToken && !providerRefreshToken) return
+  console.log('Drive token capture:', { 
+    hasProviderToken: !!providerToken, 
+    hasRefreshToken: !!providerRefreshToken,
+    email: session.user.email
+  })
+  if (!providerToken && !providerRefreshToken) {
+    console.warn('No Drive tokens from Supabase OAuth - refresh token not available')
+    return
+  }
   const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString()
-  await supabase.from('drive_tokens').upsert({
+  const { error } = await supabase.from('drive_tokens').upsert({
     user_id: session.user.id,
     access_token: providerToken || null,
     refresh_token: providerRefreshToken || null,
     expires_at: expiresAt,
     updated_at: new Date().toISOString(),
   })
+  console.log('Drive token stored:', error ? 'ERROR: ' + error.message : 'OK')
 }
 
 export default function App() {
