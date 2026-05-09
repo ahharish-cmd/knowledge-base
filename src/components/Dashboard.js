@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { CAT_ORDER, getCatColor, fmtDate } from '../lib/utils'
 import useDriveBackup from '../lib/driveBackup'
 import DriveStatusBar from './DriveStatusBar'
+import ChatPanel from './ChatPanel'
 import AddEntry from './AddEntry'
 import EntryDetail from './EntryDetail'
 
@@ -100,6 +101,7 @@ export default function Dashboard({ session }) {
   }
 
   return (
+    <>
     <div className="app-shell">
       {/* Sidebar */}
       <aside className="sidebar">
@@ -282,5 +284,12 @@ export default function Dashboard({ session }) {
         <div className={`toast ${toast.type === 'error' ? 'error' : ''}`}>{toast.msg}</div>
       )}
     </div>
+    <ChatPanel
+      session={session}
+      entries={entries}
+      onEntryAdded={handleEntryAdded}
+      showToast={showToast}
+    />
+    </>
   )
 }
