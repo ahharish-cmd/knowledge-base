@@ -20,7 +20,7 @@ async function storeAdminDriveToken(session) {
     refresh_token: providerRefreshToken || null,
     expires_at: expiresAt,
     updated_at: new Date().toISOString(),
-  })
+  }, { onConflict: 'user_id' })
 
 }
 
