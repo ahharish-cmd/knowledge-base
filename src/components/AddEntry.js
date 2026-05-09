@@ -182,9 +182,11 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
   const addCustomCat = async (name) => {
     const trimmed = name.trim()
     if (!trimmed || allCats.includes(trimmed)) return
-    await supabase.from('custom_categories').insert({ name: trimmed, created_by: session.user.id })
+    const { error } = await supabase.from('custom_categories').insert({ name: trimmed, created_by: session.user.id })
+    if (error) { showToast('Category save failed: ' + error.message, 'error'); return }
     setDraft(d => ({ ...d, category: trimmed }))
     setNewCatInput('')
+    showToast('Category added: ' + trimmed)
   }
 
   const saveEntry = async () => {
