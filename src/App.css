@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Inter:wght@400;500;600&display=swap');
 
 :root {
   --ink: #1a1714;
@@ -15,7 +15,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: 'Inter', sans-serif;
   background: var(--paper);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -23,10 +23,10 @@ body {
 
 a { color: inherit; text-decoration: none; }
 
-button { font-family: Verdana, Geneva, sans-serif; cursor: pointer; }
+button { font-family: 'Inter', sans-serif; cursor: pointer; }
 
 input, textarea, select {
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: 'Inter', sans-serif;
   color: var(--ink);
 }
 
@@ -110,7 +110,7 @@ input:focus, textarea:focus, select:focus {
   color: var(--paper);
   border: none;
   border-radius: 10px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   transition: opacity 0.15s;
   margin-bottom: 16px;
@@ -140,7 +140,7 @@ input:focus, textarea:focus, select:focus {
   padding: 11px 14px;
   border: 1px solid var(--rule);
   border-radius: 9px;
-  font-size: 14px;
+  font-size: 15px;
   background: var(--paper);
 }
 
@@ -150,7 +150,7 @@ input:focus, textarea:focus, select:focus {
   color: white;
   border: none;
   border-radius: 9px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   transition: opacity 0.15s;
 }
@@ -188,7 +188,7 @@ input:focus, textarea:focus, select:focus {
 }
 
 .sidebar-logo-text {
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -197,7 +197,7 @@ input:focus, textarea:focus, select:focus {
 }
 
 .sidebar-logo-sub {
-  font-size: 9px;
+  font-size: 11px;
   color: rgba(255,255,255,0.22);
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -211,7 +211,7 @@ input:focus, textarea:focus, select:focus {
 }
 
 .sidebar-section-label {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -224,7 +224,7 @@ input:focus, textarea:focus, select:focus {
   align-items: center;
   gap: 10px;
   padding: 8px 24px;
-  font-size: 11px;
+  font-size: 13px;
   color: rgba(255,255,255,0.45);
   cursor: pointer;
   transition: all 0.12s;
@@ -274,7 +274,7 @@ input:focus, textarea:focus, select:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: #a51d36;
   flex-shrink: 0;
@@ -298,7 +298,7 @@ input:focus, textarea:focus, select:focus {
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 7px;
   color: rgba(255,255,255,0.35);
-  font-size: 11px;
+  font-size: 13px;
   transition: all 0.12s;
 }
 
@@ -343,7 +343,7 @@ input:focus, textarea:focus, select:focus {
   font-size: 12px;
   color: var(--ink);
   width: 100%;
-  font-family: Verdana, Geneva, sans-serif;
+  font-family: 'Inter', sans-serif;
 }
 
 .search-input::placeholder { color: var(--muted); }
@@ -357,7 +357,7 @@ input:focus, textarea:focus, select:focus {
   border: none;
   border-radius: 20px;
   padding: 9px 18px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.03em;
   margin-left: auto;
@@ -369,7 +369,7 @@ input:focus, textarea:focus, select:focus {
 
 /* Entry count */
 .entry-count {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -384,7 +384,7 @@ input:focus, textarea:focus, select:focus {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -437,7 +437,7 @@ input:focus, textarea:focus, select:focus {
 }
 
 .card-tag {
-  font-size: 9px;
+  font-size: 11px;
   padding: 2px 7px;
   border-radius: 2px;
   background: transparent;
@@ -450,7 +450,7 @@ input:focus, textarea:focus, select:focus {
 
 .card-title {
   font-family: 'Playfair Display', serif;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 400;
   line-height: 1.42;
   margin-bottom: 7px;
@@ -458,7 +458,7 @@ input:focus, textarea:focus, select:focus {
 }
 
 .card-summary {
-  font-size: 11px;
+  font-size: 13px;
   color: rgba(0,0,0,0.62);
   line-height: 1.65;
   margin-bottom: 12px;
@@ -473,7 +473,7 @@ input:focus, textarea:focus, select:focus {
 .card-date { font-size: 10px; color: var(--rule); }
 
 .card-source {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -576,7 +576,7 @@ input:focus, textarea:focus, select:focus {
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .form-input {
@@ -637,7 +637,7 @@ input:focus, textarea:focus, select:focus {
 }
 
 .upload-zone-text { font-size: 13px; color: var(--muted); margin-top: 8px; }
-.upload-zone-sub { font-size: 11px; color: var(--rule); margin-top: 4px; }
+.upload-zone-sub { font-size: 13px; color: var(--rule); margin-top: 4px; }
 
 /* Processing */
 .processing-box {
@@ -662,7 +662,7 @@ input:focus, textarea:focus, select:focus {
 }
 
 .insight-label {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -716,7 +716,7 @@ input:focus, textarea:focus, select:focus {
 }
 
 .detail-body {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--ink);
   line-height: 1.75;
 }
@@ -863,7 +863,7 @@ input:focus, textarea:focus, select:focus {
   margin-bottom: 4px;
 }
 
-.new-cat-note { font-size: 11px; color: var(--muted); margin-top: 5px; }
+.new-cat-note { font-size: 13px; color: var(--muted); margin-top: 5px; }
 
 /* Responsive */
 @media (max-width: 768px) {
