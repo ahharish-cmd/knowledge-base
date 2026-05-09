@@ -284,12 +284,12 @@ export default function Dashboard({ session }) {
         <div className={`toast ${toast.type === 'error' ? 'error' : ''}`}>{toast.msg}</div>
       )}
     </div>
-    <ChatPanel
+    {session && <ChatPanel
       session={session}
       entries={entries}
       onEntryAdded={handleEntryAdded}
       showToast={showToast}
-    />
+    />}
     </>
   )
 }
