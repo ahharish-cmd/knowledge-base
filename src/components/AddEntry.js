@@ -23,6 +23,62 @@ async function aiCategorise(text) {
 }
 
 
+function TagInput({ tags, onChange }) {
+  const [input, setInput] = React.useState('')
+
+  const addTag = (val) => {
+    const trimmed = val.trim()
+    if (!trimmed || tags.includes(trimmed)) return
+    onChange([...tags, trimmed])
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      addTag(input)
+      setInput('')
+    } else if (e.key === 'Backspace' && !input && tags.length) {
+      onChange(tags.slice(0, -1))
+    }
+  }
+
+  const removeTag = (tag) => onChange(tags.filter(t => t !== tag))
+
+  return (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px 10px',
+      border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)',
+      cursor: 'text', minHeight: 42
+    }} onClick={e => e.currentTarget.querySelector('input')?.focus()}>
+      {tags.map(tag => (
+        <span key={tag} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          background: 'var(--accent-light)', color: 'var(--accent)',
+          padding: '2px 8px', borderRadius: 20, fontSize: 12, fontWeight: 500
+        }}>
+          {tag}
+          <button onClick={() => removeTag(tag)} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--accent)', padding: 0, lineHeight: 1, fontSize: 14
+          }}>x</button>
+        </span>
+      ))}
+      <input
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => { if (input.trim()) { addTag(input); setInput('') } }}
+        placeholder={tags.length === 0 ? 'Type a tag and press Enter or comma' : ''}
+        style={{
+          border: 'none', outline: 'none', background: 'transparent',
+          fontSize: 13, color: 'var(--text)', flex: 1, minWidth: 120,
+          fontFamily: 'inherit'
+        }}
+      />
+    </div>
+  )
+}
+
 export default function AddEntry({ session, customCats, onClose, onAdded, showToast }) {
   const [step, setStep] = useState('input') // input | review
   const [rawInput, setRawInput] = useState('')
