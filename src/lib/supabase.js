@@ -3,22 +3,22 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY
 
-const patchedFetch = (url, init = {}) => {
-  if (init && init.headers) {
-    const cleaned = {}
-    const entries = typeof init.headers.entries === 'function'
-      ? [...init.headers.entries()]
-      : Object.entries(init.headers)
+const safeFetch = (url, options = {}) => {
+  if (options.headers) {
+    const safe = {}
+    const entries = options.headers instanceof Headers
+      ? [...options.headers.entries()]
+      : Object.entries(options.headers)
     for (const [k, v] of entries) {
-      cleaned[k] = String(v).split('').filter(c => c.charCodeAt(0) <= 127).join('')
+      safe[k] = String(v).replace(/[^\x20-\x7E]/g, '')
     }
-    init = { ...init, headers: cleaned }
+    options = { ...options, headers: safe }
   }
-  return window.fetch(url, init)
+  return fetch(url, options)
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  global: { fetch: patchedFetch },
+  global: { fetch: safeFetch },
   auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true }
 })
 
