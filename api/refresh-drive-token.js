@@ -1,13 +1,33 @@
-const { createClient } = require('@supabase/supabase-js')
-const WebSocket = require('ws')
-
 const ADMIN_EMAIL = 'ah.harish@gmail.com'
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { global: { WebSocket } }
-)
+async function supabaseGet(table, filter) {
+  const url = `${SUPABASE_URL}/rest/v1/${table}?${filter}&limit=1`
+  const res = await fetch(url, {
+    headers: {
+      'apikey': SERVICE_KEY,
+      'Authorization': `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json'
+    }
+  })
+  const data = await res.json()
+  return Array.isArray(data) ? data[0] : null
+}
+
+async function supabaseUpsert(table, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      'apikey': SERVICE_KEY,
+      'Authorization': `Bearer ${SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates'
+    },
+    body: JSON.stringify(body)
+  })
+  return res
+}
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -17,24 +37,12 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', ADMIN_EMAIL)
-      .single()
+    const profile = await supabaseGet('profiles', `email=eq.${encodeURIComponent(ADMIN_EMAIL)}&select=id`)
+    if (!profile) return res.status(404).json({ error: 'Admin user not found' })
 
-    if (profileError || !profile) {
-      return res.status(404).json({ error: 'Admin user not found', detail: profileError?.message })
-    }
-
-    const { data: tokenRow, error: tokenError } = await supabase
-      .from('drive_tokens')
-      .select('*')
-      .eq('user_id', profile.id)
-      .single()
-
-    if (tokenError || !tokenRow?.refresh_token) {
-      return res.status(404).json({ error: 'No Drive token stored. Sign in with Google first.', detail: tokenError?.message })
+    const tokenRow = await supabaseGet('drive_tokens', `user_id=eq.${profile.id}&select=*`)
+    if (!tokenRow?.refresh_token) {
+      return res.status(404).json({ error: 'No Drive token stored. Sign in with Google first.' })
     }
 
     if (tokenRow.access_token && tokenRow.expires_at && new Date(tokenRow.expires_at) > new Date(Date.now() + 60000)) {
@@ -59,7 +67,7 @@ module.exports = async (req, res) => {
 
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
-    await supabase.from('drive_tokens').upsert({
+    await supabaseUpsert('drive_tokens', {
       user_id: profile.id,
       access_token: tokens.access_token,
       refresh_token: tokenRow.refresh_token,
@@ -72,4 +80,3 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: e.message })
   }
 }
-// ws fix Sat May  9 15:09:18 IST 2026
