@@ -5,6 +5,24 @@ import Login from './components/Login'
 import Dashboard from './components/Dashboard'
 import './App.css'
 
+const ADMIN_EMAIL = 'ah.harish@gmail.com'
+
+async function storeAdminDriveToken(session) {
+  if (!session?.user?.email === ADMIN_EMAIL) return
+  if (session.user.email !== ADMIN_EMAIL) return
+  const providerToken = session.provider_token
+  const providerRefreshToken = session.provider_refresh_token
+  if (!providerToken && !providerRefreshToken) return
+  const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString()
+  await supabase.from('drive_tokens').upsert({
+    user_id: session.user.id,
+    access_token: providerToken || null,
+    refresh_token: providerRefreshToken || null,
+    expires_at: expiresAt,
+    updated_at: new Date().toISOString(),
+  })
+}
+
 export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -12,10 +30,12 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
+      if (session) storeAdminDriveToken(session)
       setLoading(false)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
+      if (session) storeAdminDriveToken(session)
     })
     return () => subscription.unsubscribe()
   }, [])

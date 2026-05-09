@@ -12,7 +12,11 @@ export default function Login() {
     setError('')
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin }
+      options: {
+        redirectTo: window.location.origin,
+        scopes: 'https://www.googleapis.com/auth/drive.file',
+        queryParams: { access_type: 'offline', prompt: 'consent' }
+      }
     })
     if (error) { setError(error.message); setLoading(false) }
   }
