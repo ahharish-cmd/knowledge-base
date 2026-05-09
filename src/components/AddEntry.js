@@ -50,6 +50,62 @@ Text: ${text.slice(0, 3000)}`
   }
 }
 
+function TagInput({ tags, onChange }) {
+  const [input, setInput] = useState('')
+
+  const addTag = (val) => {
+    const trimmed = val.trim()
+    if (!trimmed || tags.includes(trimmed)) return
+    onChange([...tags, trimmed])
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      addTag(input)
+      setInput('')
+    } else if (e.key === 'Backspace' && !input && tags.length) {
+      onChange(tags.slice(0, -1))
+    }
+  }
+
+  const removeTag = (tag) => onChange(tags.filter(t => t !== tag))
+
+  return (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px 10px',
+      border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)',
+      cursor: 'text', minHeight: 42
+    }} onClick={e => e.currentTarget.querySelector('input')?.focus()}>
+      {tags.map(tag => (
+        <span key={tag} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          background: 'var(--accent-light)', color: 'var(--accent)',
+          padding: '2px 8px', borderRadius: 20, fontSize: 12, fontWeight: 500
+        }}>
+          {tag}
+          <button onClick={() => removeTag(tag)} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--accent)', padding: 0, lineHeight: 1, fontSize: 14
+          }}>×</button>
+        </span>
+      ))}
+      <input
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => { if (input.trim()) { addTag(input); setInput('') } }}
+        placeholder={tags.length === 0 ? 'Type a tag and press Enter or comma' : ''}
+        style={{
+          border: 'none', outline: 'none', background: 'transparent',
+          fontSize: 13, color: 'var(--text)', flex: 1, minWidth: 120,
+          fontFamily: 'inherit'
+        }}
+      />
+    </div>
+  )
+}
+
 export default function AddEntry({ session, customCats, onClose, onAdded, showToast }) {
   const [step, setStep] = useState('input') // input | review
   const [rawInput, setRawInput] = useState('')
@@ -82,12 +138,47 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
     handleFile(e.dataTransfer.files[0])
   }
 
+  const extractPdfText = async (pdfFile) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        try {
+          const typedArray = new Uint8Array(e.target.result)
+          if (!window.pdfjsLib) {
+            resolve(`PDF: ${pdfFile.name}`)
+            return
+          }
+          const pdf = await window.pdfjsLib.getDocument({ data: typedArray }).promise
+          let text = ''
+          const maxPages = Math.min(pdf.numPages, 10)
+          for (let i = 1; i <= maxPages; i++) {
+            const page = await pdf.getPage(i)
+            const content = await page.getTextContent()
+            text += content.items.map(item => item.str).join(' ') + '\n'
+          }
+          resolve(text.slice(0, 4000) || `PDF: ${pdfFile.name}`)
+        } catch (err) {
+          resolve(`PDF: ${pdfFile.name}`)
+        }
+      }
+      reader.readAsArrayBuffer(pdfFile)
+    })
+  }
+
   const processEntry = async () => {
     if (!rawInput.trim() && !file) return
     setProcessing(true)
 
-    const textForAI = rawInput.trim() || (file ? `File: ${file.name}` : '')
+    let textForAI = rawInput.trim()
     const fileType = file?.type || ''
+    
+    if (!textForAI && file) {
+      if (file.type === 'application/pdf') {
+        textForAI = await extractPdfText(file)
+      } else {
+        textForAI = `File: ${file.name}`
+      }
+    }
 
     // Try AI first, fall back to local
     let meta = await aiCategorise(textForAI)
@@ -292,9 +383,8 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
             </div>
 
             <div className="form-group">
-              <label className="form-label">Tags <span>(comma separated)</span></label>
-              <input className="form-input" value={(draft.tags || []).join(', ')}
-                onChange={e => setDraft({...draft, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean)})} />
+              <label className="form-label">Tags</label>
+              <TagInput tags={draft.tags || []} onChange={tags => setDraft({...draft, tags})} />
             </div>
 
             {draft.youtube_id && (
