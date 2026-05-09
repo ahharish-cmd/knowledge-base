@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { CAT_ORDER, getCatColor, fmtDate } from '../lib/utils'
+import useDriveBackup from '../lib/driveBackup'
+import DriveStatusBar from './DriveStatusBar'
 import AddEntry from './AddEntry'
 import EntryDetail from './EntryDetail'
 
@@ -14,6 +16,7 @@ export default function Dashboard({ session }) {
   const [selectedEntry, setSelectedEntry] = useState(null)
   const [toast, setToast] = useState(null)
 
+  const { driveStatus, driveMessage, connectDrive, pushToDrive } = useDriveBackup()
   const profile = session.user
   const initials = profile.user_metadata?.full_name
     ? profile.user_metadata.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
@@ -74,11 +77,14 @@ export default function Dashboard({ session }) {
     await supabase.auth.signOut()
   }
 
-  const handleEntryAdded = () => {
+  const handleEntryAdded = async () => {
     setShowAdd(false)
-    fetchEntries()
+    await fetchEntries()
     fetchCustomCats()
     showToast('Entry saved')
+    // Auto backup to Drive
+    const { data } = await supabase.from('entries').select('*, profiles(full_name, avatar_url)').order('created_at', { ascending: false })
+    if (data) pushToDrive(data)
   }
 
   const handleEntryDeleted = () => {
@@ -167,6 +173,15 @@ export default function Dashboard({ session }) {
           </button>
         </div>
 
+        <DriveStatusBar
+          driveStatus={driveStatus}
+          driveMessage={driveMessage}
+          connectDrive={connectDrive}
+          onManualBackup={async () => {
+            const { data } = await supabase.from('entries').select('*, profiles(full_name, avatar_url)').order('created_at', { ascending: false })
+            if (data) pushToDrive(data)
+          }}
+        />
         <div className="content-area">
           {loading ? (
             <div className="empty-state">
