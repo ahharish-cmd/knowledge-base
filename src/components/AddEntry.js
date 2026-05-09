@@ -7,104 +7,21 @@ import {
   generateTitle, generateSummary, generateInsight
 } from '../lib/utils'
 
-const ANTHROPIC_API_KEY = process.env.REACT_APP_ANTHROPIC_API_KEY
-
 async function aiCategorise(text) {
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('/api/categorise', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-calls': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5',
-        max_tokens: 800,
-        system: 'You are a JSON-only API. Respond with a single valid JSON object and nothing else. No markdown, no explanation.',
-        messages: [{
-          role: 'user',
-          content: `Analyse this text and return JSON with these exact fields:
-- title: concise 6-8 word title
-- category: one of: Leadership, Strategy, Macro & Policy, Finance, Technology, Operations, Marketing, Personal Growth, India & SMEs, Productivity, Mental Models, Personal Interests, Other
-- summary: 2-3 sentences capturing the core insight
-- key_insight: single most actionable takeaway in one sentence
-- tags: array of 4-5 relevant keyword strings
-- source_type: one of: Article, AI Conversation, Book Note, Video, Personal Note, Research, PDF, Image / Screenshot, Podcast
-
-Text: ${text.slice(0, 3000)}`
-        }]
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
     })
-    if (!res.ok) throw new Error('API error')
-    const data = await res.json()
-    const raw = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
-    const clean = raw.replace(/```json|```/g, '').trim()
-    const match = clean.match(/\{[\s\S]*\}/)
-    if (match) return JSON.parse(match[0])
-    throw new Error('Parse failed')
+    if (!res.ok) throw new Error('API error ' + res.status)
+    return await res.json()
   } catch (e) {
-    console.error('AI categorise failed, using local:', e)
+    console.error('AI categorise failed:', e.message)
     return null
   }
 }
 
-function TagInput({ tags, onChange }) {
-  const [input, setInput] = useState('')
-
-  const addTag = (val) => {
-    const trimmed = val.trim()
-    if (!trimmed || tags.includes(trimmed)) return
-    onChange([...tags, trimmed])
-  }
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault()
-      addTag(input)
-      setInput('')
-    } else if (e.key === 'Backspace' && !input && tags.length) {
-      onChange(tags.slice(0, -1))
-    }
-  }
-
-  const removeTag = (tag) => onChange(tags.filter(t => t !== tag))
-
-  return (
-    <div style={{
-      display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px 10px',
-      border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)',
-      cursor: 'text', minHeight: 42
-    }} onClick={e => e.currentTarget.querySelector('input')?.focus()}>
-      {tags.map(tag => (
-        <span key={tag} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4,
-          background: 'var(--accent-light)', color: 'var(--accent)',
-          padding: '2px 8px', borderRadius: 20, fontSize: 12, fontWeight: 500
-        }}>
-          {tag}
-          <button onClick={() => removeTag(tag)} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--accent)', padding: 0, lineHeight: 1, fontSize: 14
-          }}>×</button>
-        </span>
-      ))}
-      <input
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={() => { if (input.trim()) { addTag(input); setInput('') } }}
-        placeholder={tags.length === 0 ? 'Type a tag and press Enter or comma' : ''}
-        style={{
-          border: 'none', outline: 'none', background: 'transparent',
-          fontSize: 13, color: 'var(--text)', flex: 1, minWidth: 120,
-          fontFamily: 'inherit'
-        }}
-      />
-    </div>
-  )
-}
 
 export default function AddEntry({ session, customCats, onClose, onAdded, showToast }) {
   const [step, setStep] = useState('input') // input | review
