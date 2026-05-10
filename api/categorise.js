@@ -8,10 +8,33 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
-    const { text } = req.body
-    if (!text) return res.status(400).json({ error: 'No text provided' })
+    const { text, imageBase64, imageMediaType } = req.body
 
-    const cleanText = text.replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ').slice(0, 3000)
+    if (!text && !imageBase64) return res.status(400).json({ error: 'No content provided' })
+
+    const prompt = 'Analyse this content and return JSON with these exact fields:\n- title: concise 6-8 word title\n- category: one of: Leadership, Strategy, Macro & Policy, Finance, Technology, Operations, Marketing, Personal Growth, India & SMEs, Productivity, Mental Models, Personal Interests, Other\n- summary: 2-3 sentences capturing the core insight\n- key_insight: single most actionable takeaway in one sentence\n- tags: array of 4-5 relevant keyword strings\n- source_type: one of: Article, AI Conversation, Book Note, Video, Personal Note, Research, PDF, Image / Screenshot, Podcast\n\nIf this is an image, extract all visible text and use it to fill the fields above.'
+
+    // Build the user message — vision if image provided, text otherwise
+    let userContent
+    if (imageBase64 && imageMediaType) {
+      userContent = [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: imageMediaType,
+            data: imageBase64
+          }
+        },
+        {
+          type: 'text',
+          text: prompt
+        }
+      ]
+    } else {
+      const cleanText = text.replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ').slice(0, 3000)
+      userContent = prompt + '\n\nText: ' + cleanText
+    }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -24,10 +47,7 @@ module.exports = async (req, res) => {
         model: 'claude-haiku-4-5',
         max_tokens: 800,
         system: 'You are a JSON-only API. Respond with a single valid JSON object and nothing else. No markdown, no explanation.',
-        messages: [{
-          role: 'user',
-          content: 'Analyse this text and return JSON with these exact fields:\n- title: concise 6-8 word title\n- category: one of: Leadership, Strategy, Macro & Policy, Finance, Technology, Operations, Marketing, Personal Growth, India & SMEs, Productivity, Mental Models, Personal Interests, Other\n- summary: 2-3 sentences capturing the core insight\n- key_insight: single most actionable takeaway in one sentence\n- tags: array of 4-5 relevant keyword strings\n- source_type: one of: Article, AI Conversation, Book Note, Video, Personal Note, Research, PDF, Image / Screenshot, Podcast\n\nText: ' + cleanText
-        }]
+        messages: [{ role: 'user', content: userContent }]
       })
     })
 

@@ -7,12 +7,17 @@ import {
   generateTitle, generateSummary, generateInsight
 } from '../lib/utils'
 
-async function aiCategorise(text) {
+async function aiCategorise(text, imageBase64, imageMediaType) {
   try {
+    const body = { text }
+    if (imageBase64 && imageMediaType) {
+      body.imageBase64 = imageBase64
+      body.imageMediaType = imageMediaType
+    }
     const res = await fetch('/api/categorise', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
+      body: JSON.stringify(body)
     })
     if (!res.ok) throw new Error('API error ' + res.status)
     return await res.json()
@@ -22,6 +27,16 @@ async function aiCategorise(text) {
   }
 }
 
+const imageToBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => {
+    // result is "data:image/jpeg;base64,XXXX" — strip the prefix
+    const base64 = reader.result.split(',')[1]
+    resolve(base64)
+  }
+  reader.onerror = reject
+  reader.readAsDataURL(file)
+})
 
 function TagInput({ tags, onChange }) {
   const [input, setInput] = React.useState('')
@@ -143,18 +158,30 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
     setProcessing(true)
 
     let textForAI = rawInput.trim()
+    let imageBase64 = null
+    let imageMediaType = null
     const fileType = file?.type || ''
-    
-    if (!textForAI && file) {
+
+    if (file) {
       if (file.type === 'application/pdf') {
-        textForAI = await extractPdfText(file)
-      } else {
-        textForAI = `File: ${file.name}`
+        // PDF — extract text as before
+        if (!textForAI) textForAI = await extractPdfText(file)
+      } else if (file.type.startsWith('image/')) {
+        // Image — convert to base64 for vision
+        try {
+          imageBase64 = await imageToBase64(file)
+          imageMediaType = file.type
+          // Keep filename as fallback text context
+          if (!textForAI) textForAI = file.name
+        } catch (e) {
+          console.error('Image to base64 failed:', e)
+          if (!textForAI) textForAI = `Image: ${file.name}`
+        }
       }
     }
 
-    // Try AI first, fall back to local
-    let meta = await aiCategorise(textForAI)
+    // Try AI first (with vision if image), fall back to local
+    let meta = await aiCategorise(textForAI, imageBase64, imageMediaType)
     if (!meta) {
       meta = {
         title: generateTitle(textForAI),
