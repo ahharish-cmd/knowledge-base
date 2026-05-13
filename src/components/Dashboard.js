@@ -100,6 +100,13 @@ export default function Dashboard({ session }) {
     showToast('Entry updated')
   }
 
+  // Truncate summary for card display — full 200-word summary shown in detail view
+  const truncateSummary = (text, limit = 160) => {
+    if (!text) return ''
+    if (text.length <= limit) return text
+    return text.slice(0, limit).trimEnd() + '...'
+  }
+
   return (
     <>
     <div className="app-shell">
@@ -116,7 +123,7 @@ export default function Dashboard({ session }) {
             className={`sidebar-cat ${filterCat === 'All' ? 'active' : ''}`}
             onClick={() => setFilterCat('All')}
           >
-            <span className="sidebar-cat-dot" style={{ background: 'rgba(255,255,255,0.3)' }} />
+            <span className="sidebar-cat-dot" style={{ background: filterCat === 'All' ? '#a51d36' : 'rgba(255,255,255,0.2)' }} />
             All entries
             <span className="sidebar-cat-count">{entries.length}</span>
           </button>
@@ -128,7 +135,7 @@ export default function Dashboard({ session }) {
               className={`sidebar-cat ${filterCat === cat ? 'active' : ''}`}
               onClick={() => setFilterCat(cat)}
             >
-              <span className="sidebar-cat-dot" style={{ background: getCatColor(cat).dot }} />
+              <span className="sidebar-cat-dot" style={{ background: filterCat === cat ? '#a51d36' : 'rgba(255,255,255,0.2)' }} />
               {cat}
               <span className="sidebar-cat-count">
                 {entries.filter(e => e.category === cat).length}
@@ -213,41 +220,54 @@ export default function Dashboard({ session }) {
             allCats.filter(cat => grouped[cat]).map(cat => (
               <div key={cat} className="cat-section">
                 <div className="cat-label">
-                  <span className="cat-dot" style={{ background: getCatColor(cat).dot }} />
                   {cat}
                   <span className="cat-count">({grouped[cat].length})</span>
                 </div>
                 <div className="entries-grid">
-                  {grouped[cat].map(entry => (
-                    <div
-                      key={entry.id}
-                      className="entry-card"
-                      style={{ borderTopColor: getCatColor(cat).dot }}
-                      onClick={() => setSelectedEntry(entry)}
-                    >
-                      <div className="card-tags">
-                        {(entry.tags || []).slice(0, 3).map(t => (
-                          <span key={t} className="card-tag">{t}</span>
-                        ))}
-                      </div>
-                      <div className="card-title">{entry.title}</div>
-                      <div className="card-summary">{(entry.summary || '').slice(0, 110)}...</div>
-                      <div className="card-meta">
-                        <span className="card-date">{fmtDate(entry.created_at)}</span>
-                        <span className="card-source" style={{ background: getCatColor(cat).bg, color: getCatColor(cat).dot }}>
-                          {entry.source_type}
-                        </span>
-                      </div>
-                      {entry.profiles?.full_name && (
-                        <div className="card-user" style={{ marginTop: 8 }}>
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                          </svg>
-                          {entry.profiles.full_name}
+                  {grouped[cat].map(entry => {
+                    const summary = entry.summary || ''
+                    const truncated = truncateSummary(summary)
+                    const isLong = summary.length > 160
+                    return (
+                      <div
+                        key={entry.id}
+                        className="entry-card"
+                        onClick={() => setSelectedEntry(entry)}
+                      >
+                        <div className="card-tags">
+                          {(entry.tags || []).slice(0, 3).map(t => (
+                            <span key={t} className="card-tag">{t}</span>
+                          ))}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        <div className="card-title">{entry.title}</div>
+                        <div className="card-summary">
+                          {truncated}
+                          {isLong && (
+                            <span className="card-read-more"> Read more</span>
+                          )}
+                        </div>
+                        <div className="card-meta">
+                          <div className="card-dates">
+                            <span className="card-date">{fmtDate(entry.created_at)}</span>
+                            {entry.updated_at && (new Date(entry.updated_at) - new Date(entry.created_at)) > 60000 && (
+                              <span className="card-date card-modified">Edited {fmtDate(entry.updated_at)}</span>
+                            )}
+                          </div>
+                          <span className="card-source">
+                            {entry.source_type}
+                          </span>
+                        </div>
+                        {entry.profiles?.full_name && (
+                          <div className="card-user" style={{ marginTop: 8 }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            {entry.profiles.full_name}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             ))

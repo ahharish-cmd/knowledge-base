@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
 
     if (!text && !imageBase64) return res.status(400).json({ error: 'No content provided' })
 
-    const prompt = 'Analyse this content and return JSON with these exact fields:\n- title: concise 6-8 word title\n- category: one of: Leadership, Strategy, Macro & Policy, Finance, Technology, Operations, Marketing, Personal Growth, India & SMEs, Productivity, Mental Models, Personal Interests, Other\n- summary: 2-3 sentences capturing the core insight\n- key_insight: single most actionable takeaway in one sentence\n- tags: array of 4-5 relevant keyword strings\n- source_type: one of: Article, AI Conversation, Book Note, Video, Personal Note, Research, PDF, Image / Screenshot, Podcast\n\nIf this is an image, extract all visible text and use it to fill the fields above.'
+    const prompt = 'Analyse this content and return JSON with these exact fields:\n- title: concise 6-8 word title\n- category: one of: Leadership, Strategy, Macro & Policy, Finance, Technology, Operations, Marketing, Personal Growth, India & SMEs, Productivity, Mental Models, Personal Interests, Other\n- summary: a detailed 150-200 word summary capturing the key ideas, arguments, and insights from the content. Write in clear prose. Do not use bullet points.\n- key_insight: single most actionable takeaway in one sentence\n- tags: array of 4-5 relevant keyword strings\n- source_type: one of: Article, AI Conversation, Book Note, Video, Personal Note, Research, PDF, Image / Screenshot, Podcast\n\nIf this is an image, extract all visible text and use it to fill the fields above.'
 
     // Build the user message — vision if image provided, text otherwise
     let userContent
@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
         }
       ]
     } else {
-      const cleanText = text.replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ').slice(0, 3000)
+      const cleanText = text.replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ').slice(0, 6000)
       userContent = prompt + '\n\nText: ' + cleanText
     }
 
@@ -45,7 +45,7 @@ module.exports = async (req, res) => {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5',
-        max_tokens: 800,
+        max_tokens: 1200,
         system: 'You are a JSON-only API. Respond with a single valid JSON object and nothing else. No markdown, no explanation.',
         messages: [{ role: 'user', content: userContent }]
       })

@@ -29,6 +29,7 @@ export default function EntryDetail({ entry, session, customCats, onClose, onDel
       source_type: draft.source_type,
       tags: draft.tags,
       transcript: draft.transcript,
+      updated_at: new Date().toISOString(),
     }).eq('id', entry.id)
     setSaving(false)
     if (error) { showToast('Update failed', 'error'); return }

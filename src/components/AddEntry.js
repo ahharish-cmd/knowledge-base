@@ -30,7 +30,6 @@ async function aiCategorise(text, imageBase64, imageMediaType) {
 const imageToBase64 = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader()
   reader.onload = () => {
-    // result is "data:image/jpeg;base64,XXXX" — strip the prefix
     const base64 = reader.result.split(',')[1]
     resolve(base64)
   }
@@ -95,9 +94,9 @@ function TagInput({ tags, onChange }) {
 }
 
 export default function AddEntry({ session, customCats, onClose, onAdded, showToast }) {
-  const [step, setStep] = useState('input') // input | review
+  const [step, setStep] = useState('input')
   const [rawInput, setRawInput] = useState('')
-  const [file, setFile] = useState(null)
+  const [files, setFiles] = useState([]) // now an array
   const [dragOver, setDragOver] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -109,21 +108,34 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
   const isYT = isYouTubeUrl(rawInput)
   const ytId = isYT ? extractYouTubeId(rawInput) : null
 
-  const handleFile = (f) => {
-    if (!f) return
+  const handleFiles = (newFiles) => {
     const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif']
-    if (!allowed.includes(f.type)) {
-      showToast('Only PDF and image files supported', 'error')
-      return
-    }
-    setFile(f)
-    setRawInput(prev => prev || f.name)
+    const valid = Array.from(newFiles).filter(f => {
+      if (!allowed.includes(f.type)) {
+        showToast(`${f.name}: only PDF and image files supported`, 'error')
+        return false
+      }
+      return true
+    })
+    if (!valid.length) return
+    setFiles(prev => {
+      const combined = [...prev, ...valid]
+      // If no text pasted yet, set filename(s) as context
+      if (!rawInput.trim()) {
+        setRawInput(combined.map(f => f.name).join(', '))
+      }
+      return combined
+    })
+  }
+
+  const removeFile = (index) => {
+    setFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
     setDragOver(false)
-    handleFile(e.dataTransfer.files[0])
+    handleFiles(e.dataTransfer.files)
   }
 
   const extractPdfText = async (pdfFile) => {
@@ -154,31 +166,35 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
   }
 
   const processEntry = async () => {
-    if (!rawInput.trim() && !file) return
+    if (!rawInput.trim() && !files.length) return
     setProcessing(true)
 
     let textForAI = rawInput.trim()
     let imageBase64 = null
     let imageMediaType = null
-    const fileType = file?.type || ''
 
-    if (file) {
-      if (file.type === 'application/pdf') {
-        // PDF — extract text as before
-        if (!textForAI) textForAI = await extractPdfText(file)
-      } else if (file.type.startsWith('image/')) {
-        // Image — convert to base64 for vision
-        try {
-          imageBase64 = await imageToBase64(file)
-          imageMediaType = file.type
-          // Keep filename as fallback text context
-          if (!textForAI) textForAI = file.name
-        } catch (e) {
-          console.error('Image to base64 failed:', e)
-          if (!textForAI) textForAI = `Image: ${file.name}`
-        }
+    const pdfFiles = files.filter(f => f.type === 'application/pdf')
+    const imageFiles = files.filter(f => f.type.startsWith('image/'))
+
+    if (pdfFiles.length > 0) {
+      // Extract text from all PDFs and combine silently
+      const texts = await Promise.all(pdfFiles.map(f => extractPdfText(f)))
+      const combinedPdfText = texts.join('\n\n')
+      // Prepend any pasted text, then combined PDF text
+      textForAI = [textForAI, combinedPdfText].filter(Boolean).join('\n\n').slice(0, 6000)
+    } else if (imageFiles.length > 0) {
+      // Use the first image for vision (vision handles one image at a time)
+      try {
+        imageBase64 = await imageToBase64(imageFiles[0])
+        imageMediaType = imageFiles[0].type
+        if (!textForAI) textForAI = imageFiles[0].name
+      } catch (e) {
+        console.error('Image to base64 failed:', e)
+        if (!textForAI) textForAI = `Image: ${imageFiles[0].name}`
       }
     }
+
+    const primaryFileType = files[0]?.type || ''
 
     // Try AI first (with vision if image), fall back to local
     let meta = await aiCategorise(textForAI, imageBase64, imageMediaType)
@@ -189,7 +205,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
         summary: generateSummary(textForAI),
         key_insight: generateInsight(textForAI),
         tags: extractTags(textForAI),
-        source_type: detectSourceType(textForAI, fileType),
+        source_type: detectSourceType(textForAI, primaryFileType),
       }
     }
 
@@ -218,14 +234,16 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
 
   const saveEntry = async () => {
     setSaving(true)
+    // Upload first file only (primary attachment)
     let fileUrl = null, fileName = null, fileType = null
+    const primaryFile = files[0] || null
 
-    if (file) {
-      const ext = file.name.split('.').pop()
+    if (primaryFile) {
+      const ext = primaryFile.name.split('.').pop()
       const path = `${session.user.id}/${Date.now()}.${ext}`
       const { error: uploadError } = await supabase.storage
         .from('knowledge-files')
-        .upload(path, file)
+        .upload(path, primaryFile)
       if (uploadError) {
         showToast('File upload failed', 'error')
         setSaving(false)
@@ -233,8 +251,10 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
       }
       const { data: { publicUrl } } = supabase.storage.from('knowledge-files').getPublicUrl(path)
       fileUrl = publicUrl
-      fileName = file.name
-      fileType = file.type
+      fileName = files.length > 1
+        ? files.map(f => f.name).join(', ')
+        : primaryFile.name
+      fileType = primaryFile.type
     }
 
     const { error } = await supabase.from('entries').insert({
@@ -276,7 +296,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
         {step === 'input' && (
           <>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>
-              Paste any text, a YouTube URL, or upload a PDF / image. Claude will read and categorise it.
+              Paste any text, a YouTube URL, or upload one or more PDFs / images. Claude will read and categorise it.
             </p>
 
             <div className="form-group">
@@ -301,7 +321,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
             )}
 
             <div className="form-group">
-              <label className="form-label">Or upload a file <span>(PDF, image, screenshot)</span></label>
+              <label className="form-label">Upload files <span>(PDF, image, screenshot — multiple PDFs allowed)</span></label>
               <div
                 className={`upload-zone ${dragOver ? 'drag-over' : ''}`}
                 onClick={() => fileRef.current?.click()}
@@ -313,11 +333,30 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
                   <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
                   <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
-                <div className="upload-zone-text">{file ? file.name : 'Click to upload or drag and drop'}</div>
-                <div className="upload-zone-sub">PDF, JPG, PNG, WEBP</div>
+                <div className="upload-zone-text">
+                  {files.length === 0 ? 'Click to upload or drag and drop' : `${files.length} file${files.length > 1 ? 's' : ''} selected — click to add more`}
+                </div>
+                <div className="upload-zone-sub">PDF, JPG, PNG, WEBP — multiple PDFs supported</div>
               </div>
-              <input ref={fileRef} type="file" accept=".pdf,image/*" style={{ display: 'none' }}
-                onChange={e => handleFile(e.target.files[0])} />
+              <input ref={fileRef} type="file" accept=".pdf,image/*" multiple style={{ display: 'none' }}
+                onChange={e => handleFiles(e.target.files)} />
+
+              {/* File list */}
+              {files.length > 0 && (
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {files.map((f, i) => (
+                    <div key={i} className="file-preview" style={{ justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {f.type === 'application/pdf' ? '📄' : '🖼️'} {f.name}
+                      </span>
+                      <button onClick={() => removeFile(i)} style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'var(--muted)', fontSize: 16, padding: '0 4px', flexShrink: 0
+                      }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {processing && (
@@ -331,7 +370,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
               <button className="btn-ghost" onClick={onClose}>Cancel</button>
               <button
                 className="btn-primary"
-                disabled={(!rawInput.trim() && !file) || processing}
+                disabled={(!rawInput.trim() && !files.length) || processing}
                 onClick={processEntry}
               >
                 {processing ? 'Processing...' : 'Process & Review →'}

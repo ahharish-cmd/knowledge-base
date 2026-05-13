@@ -84,92 +84,123 @@ export default function ChatPanel({ session, entries, onEntryAdded, showToast })
       </button>
 
       {open && (
-        <div style={{
-          position: "fixed", bottom: 90, right: 28, zIndex: 999,
-          width: 380, height: 520,
-          background: "var(--bg)", borderRadius: 16,
-          boxShadow: "0 8px 40px rgba(0,0,0,0.15)",
-          border: "1px solid var(--border)",
-          display: "flex", flexDirection: "column",
-          fontFamily: "var(--font-body)",
-        }}>
-          <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>Ask your Knowledge Base</div>
-              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Searches your saved entries first</div>
+        <>
+          {/* Solid overlay behind panel to block card grid */}
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 997,
+            background: "rgba(26,23,20,0.45)",
+          }} onClick={() => setOpen(false)} />
+
+          <div style={{
+            position: "fixed", bottom: 90, right: 28, zIndex: 999,
+            width: 400, height: 540,
+            background: "#ffffff",
+            borderRadius: 16,
+            boxShadow: "0 12px 48px rgba(0,0,0,0.22)",
+            border: "1px solid #d0c8be",
+            display: "flex", flexDirection: "column",
+            fontFamily: "Inter, sans-serif",
+          }}>
+            <div style={{
+              padding: "16px 20px",
+              borderBottom: "1px solid #EEEAE3",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              background: "#ffffff",
+              borderRadius: "16px 16px 0 0",
+            }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: "#1a1714" }}>Ask your Knowledge Base</div>
+                <div style={{ fontSize: 11, color: "#8a8078", marginTop: 2 }}>Searches your saved entries first</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {messages.length > 0 && (
+                  <button onClick={() => { setMessages([]); setHistory([]) }} style={{
+                    fontSize: 11, color: "#8a8078", background: "none",
+                    border: "1px solid #d0c8be", borderRadius: 6,
+                    padding: "3px 8px", cursor: "pointer"
+                  }}>Clear</button>
+                )}
+                <button onClick={() => setOpen(false)} style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  color: "#8a8078", fontSize: 20, lineHeight: 1, padding: "0 2px"
+                }}>×</button>
+              </div>
             </div>
-            {messages.length > 0 && (
-              <button onClick={() => { setMessages([]); setHistory([]) }} style={{
-                fontSize: 11, color: "var(--muted)", background: "none",
-                border: "1px solid var(--border)", borderRadius: 6,
-                padding: "3px 8px", cursor: "pointer"
-              }}>Clear</button>
-            )}
-          </div>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
-            {messages.length === 0 && (
-              <div style={{ textAlign: "center", color: "var(--muted)", fontSize: 13, marginTop: 40, lineHeight: 1.7 }}>
-                Ask anything about your saved knowledge.<br/>
-                <span style={{ fontSize: 11 }}>Try: "Explain CRR" or "What do I know about delegation?"</span>
-              </div>
-            )}
-            {messages.map((msg, i) => (
-              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.type === "user" ? "flex-end" : "flex-start" }}>
-                {msg.relevant?.length > 0 && msg.type === "user" && (
-                  <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4, textAlign: "right" }}>
-                    Found {msg.relevant.length} relevant {msg.relevant.length === 1 ? "entry" : "entries"}
-                  </div>
-                )}
-                <div style={{
-                  maxWidth: "85%", padding: "10px 13px", borderRadius: 12,
-                  background: msg.type === "user" ? "#1a1714" : "var(--surface)",
-                  color: msg.type === "user" ? "white" : "var(--text)",
-                  fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap",
-                  borderBottomRightRadius: msg.type === "user" ? 4 : 12,
-                  borderBottomLeftRadius: msg.type === "assistant" ? 4 : 12,
-                }}>
-                  {msg.text}
+            <div style={{
+              flex: 1, overflowY: "auto", padding: "14px 16px",
+              display: "flex", flexDirection: "column", gap: 12,
+              background: "#ffffff",
+            }}>
+              {messages.length === 0 && (
+                <div style={{ textAlign: "center", color: "#8a8078", fontSize: 13, marginTop: 40, lineHeight: 1.7 }}>
+                  Ask anything about your saved knowledge.<br/>
+                  <span style={{ fontSize: 11 }}>Try: "Explain CRR" or "What do I know about delegation?"</span>
                 </div>
-                {msg.type === "assistant" && (
-                  <button onClick={() => saveAsEntry(msg)} style={{
-                    marginTop: 5, fontSize: 11, color: "var(--accent)",
-                    background: "none", border: "none", cursor: "pointer",
-                    padding: "2px 4px", textDecoration: "underline"
-                  }}>+ Save as entry</button>
-                )}
-              </div>
-            ))}
-            {loading && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--muted)", fontSize: 13 }}>
-                <div style={{ width: 16, height: 16, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                Thinking...
-              </div>
-            )}
-            <div ref={bottomRef} />
-          </div>
+              )}
+              {messages.map((msg, i) => (
+                <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.type === "user" ? "flex-end" : "flex-start" }}>
+                  {msg.relevant?.length > 0 && msg.type === "user" && (
+                    <div style={{ fontSize: 10, color: "#8a8078", marginBottom: 4, textAlign: "right" }}>
+                      Found {msg.relevant.length} relevant {msg.relevant.length === 1 ? "entry" : "entries"}
+                    </div>
+                  )}
+                  <div style={{
+                    maxWidth: "85%", padding: "10px 13px", borderRadius: 12,
+                    background: msg.type === "user" ? "#1a1714" : "#F7F4EF",
+                    color: msg.type === "user" ? "white" : "#1a1714",
+                    fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap",
+                    borderBottomRightRadius: msg.type === "user" ? 4 : 12,
+                    borderBottomLeftRadius: msg.type === "assistant" ? 4 : 12,
+                  }}>
+                    {msg.text}
+                  </div>
+                  {msg.type === "assistant" && (
+                    <button onClick={() => saveAsEntry(msg)} style={{
+                      marginTop: 5, fontSize: 11, color: "#a51d36",
+                      background: "none", border: "none", cursor: "pointer",
+                      padding: "2px 4px", textDecoration: "underline"
+                    }}>+ Save as entry</button>
+                  )}
+                </div>
+              ))}
+              {loading && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#8a8078", fontSize: 13 }}>
+                  <div style={{ width: 16, height: 16, border: "2px solid #d0c8be", borderTopColor: "#a51d36", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                  Thinking...
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
 
-          <div style={{ padding: "12px 14px", borderTop: "1px solid var(--border)", display: "flex", gap: 8 }}>
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
-              placeholder="Ask anything..."
-              style={{
-                flex: 1, padding: "9px 12px", borderRadius: 8,
-                border: "1px solid var(--border)", background: "var(--surface)",
-                fontSize: 13, color: "var(--text)", fontFamily: "inherit", outline: "none"
-              }}
-            />
-            <button onClick={sendMessage} disabled={!input.trim() || loading} style={{
-              padding: "9px 14px", borderRadius: 8, border: "none",
-              background: "#1a1714", color: "white", cursor: "pointer",
-              fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-              opacity: !input.trim() || loading ? 0.5 : 1
-            }}>Ask</button>
+            <div style={{
+              padding: "12px 14px",
+              borderTop: "1px solid #EEEAE3",
+              display: "flex", gap: 8,
+              background: "#ffffff",
+              borderRadius: "0 0 16px 16px",
+            }}>
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                placeholder="Ask anything..."
+                style={{
+                  flex: 1, padding: "9px 12px", borderRadius: 8,
+                  border: "1px solid #d0c8be", background: "#FAFAF9",
+                  fontSize: 13, color: "#1a1714", fontFamily: "inherit", outline: "none"
+                }}
+              />
+              <button onClick={sendMessage} disabled={!input.trim() || loading} style={{
+                padding: "9px 14px", borderRadius: 8, border: "none",
+                background: "#1a1714", color: "white", cursor: "pointer",
+                fontSize: 13, fontWeight: 600, fontFamily: "inherit",
+                opacity: !input.trim() || loading ? 0.5 : 1
+              }}>Ask</button>
+            </div>
           </div>
-        </div>
+        </>
       )}
       <style>{"@keyframes spin { to { transform: rotate(360deg) } }"}</style>
     </>

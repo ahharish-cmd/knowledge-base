@@ -470,7 +470,11 @@ input:focus, textarea:focus, select:focus {
   justify-content: space-between;
 }
 
+.card-dates { display: flex; flex-direction: column; gap: 1px; }
 .card-date { font-size: 10px; color: var(--rule); }
+.card-modified { font-style: italic; }
+.card-read-more { color: #a51d36; font-size: 11px; font-style: italic; font-weight: 500; }
+.card-read-more { color: #a51d36; font-size: 11px; font-style: italic; font-weight: 500; cursor: pointer; }
 
 .card-source {
   font-size: 11px;
