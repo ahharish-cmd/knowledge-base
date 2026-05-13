@@ -178,7 +178,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
 
     if (pdfFiles.length > 0) {
       // Extract text from all PDFs and combine silently
-      const texts = await Promise.all(pdfFiles.map(f => extractPdfText(f)))
+      const texts = []; for (const f of pdfFiles) { texts.push(await extractPdfText(f)) }
       const combinedPdfText = texts.join('\n\n')
       // Prepend any pasted text, then combined PDF text
       textForAI = [textForAI, combinedPdfText].filter(Boolean).join('\n\n').slice(0, 6000)
