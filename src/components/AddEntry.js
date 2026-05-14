@@ -207,7 +207,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
 
     setDraft({
       ...meta,
-      raw_content: rawInput.trim(),
+      raw_content: textForAI || rawInput.trim(),
       transcript: '',
       youtube_id: ytId || null,
       youtube_url: isYT ? rawInput.trim() : null,
