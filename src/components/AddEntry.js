@@ -96,7 +96,7 @@ function TagInput({ tags, onChange }) {
 export default function AddEntry({ session, customCats, onClose, onAdded, showToast }) {
   const [step, setStep] = useState('input')
   const [rawInput, setRawInput] = useState('')
-  const [files, setFiles] = useState([]) // now an array
+  const [files, setFiles] = useState([])
   const [dragOver, setDragOver] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -118,14 +118,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
       return true
     })
     if (!valid.length) return
-    setFiles(prev => {
-      const combined = [...prev, ...valid]
-      // If no text pasted yet, set filename(s) as context
-      if (!rawInput.trim()) {
-        setRawInput(combined.map(f => f.name).join(', '))
-      }
-      return combined
-    })
+    setFiles(prev => [...prev, ...valid])
   }
 
   const removeFile = (index) => {
@@ -156,7 +149,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
             const content = await page.getTextContent()
             text += content.items.map(item => item.str).join(' ') + '\n'
           }
-          resolve(text.slice(0, 4000) || `PDF: ${pdfFile.name}`)
+          resolve(text.slice(0, 3000) || `PDF: ${pdfFile.name}`)
         } catch (err) {
           resolve(`PDF: ${pdfFile.name}`)
         }
@@ -177,13 +170,15 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
     const imageFiles = files.filter(f => f.type.startsWith('image/'))
 
     if (pdfFiles.length > 0) {
-      // Extract text from all PDFs and combine silently
-      const texts = []; for (const f of pdfFiles) { texts.push(await extractPdfText(f)) }
+      // Extract text from each PDF sequentially then combine
+      const texts = []
+      for (const f of pdfFiles) {
+        const extracted = await extractPdfText(f)
+        texts.push(extracted)
+      }
       const combinedPdfText = texts.join('\n\n')
-      // Prepend any pasted text, then combined PDF text
       textForAI = [textForAI, combinedPdfText].filter(Boolean).join('\n\n').slice(0, 6000)
     } else if (imageFiles.length > 0) {
-      // Use the first image for vision (vision handles one image at a time)
       try {
         imageBase64 = await imageToBase64(imageFiles[0])
         imageMediaType = imageFiles[0].type
@@ -196,7 +191,6 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
 
     const primaryFileType = files[0]?.type || ''
 
-    // Try AI first (with vision if image), fall back to local
     let meta = await aiCategorise(textForAI, imageBase64, imageMediaType)
     if (!meta) {
       meta = {
@@ -234,28 +228,26 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
 
   const saveEntry = async () => {
     setSaving(true)
-    // Upload first file only (primary attachment)
-    let fileUrl = null, fileName = null, fileType = null
-    const primaryFile = files[0] || null
 
-    if (primaryFile) {
-      const ext = primaryFile.name.split('.').pop()
-      const path = `${session.user.id}/${Date.now()}.${ext}`
+    // Upload all files individually and collect their details
+    const uploadedFiles = []
+    for (const f of files) {
+      const ext = f.name.split('.').pop()
+      const path = `${session.user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
       const { error: uploadError } = await supabase.storage
         .from('knowledge-files')
-        .upload(path, primaryFile)
+        .upload(path, f)
       if (uploadError) {
-        showToast('File upload failed', 'error')
+        showToast(`Upload failed: ${f.name}`, 'error')
         setSaving(false)
         return
       }
       const { data: { publicUrl } } = supabase.storage.from('knowledge-files').getPublicUrl(path)
-      fileUrl = publicUrl
-      fileName = files.length > 1
-        ? files.map(f => f.name).join(', ')
-        : primaryFile.name
-      fileType = primaryFile.type
+      uploadedFiles.push({ name: f.name, url: publicUrl, type: f.type })
     }
+
+    // Keep file_url/file_name for backward compatibility with existing entries
+    const primaryFile = uploadedFiles[0] || null
 
     const { error } = await supabase.from('entries').insert({
       created_by: session.user.id,
@@ -269,9 +261,10 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
       youtube_id: draft.youtube_id || null,
       youtube_url: draft.youtube_url || null,
       transcript: draft.transcript || null,
-      file_url: fileUrl,
-      file_name: fileName,
-      file_type: fileType,
+      file_url: primaryFile?.url || null,
+      file_name: primaryFile?.name || null,
+      file_type: primaryFile?.type || null,
+      file_urls: uploadedFiles.length > 0 ? uploadedFiles : null,
     })
 
     setSaving(false)
@@ -296,7 +289,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
         {step === 'input' && (
           <>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>
-              Paste any text, a YouTube URL, or upload one or more PDFs / images. Claude will read and categorise it.
+              Paste any text, a YouTube URL, or upload one or more PDFs / images. Claude will read and categorise everything.
             </p>
 
             <div className="form-group">
@@ -321,7 +314,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
             )}
 
             <div className="form-group">
-              <label className="form-label">Upload files <span>(PDF, image, screenshot — multiple PDFs allowed)</span></label>
+              <label className="form-label">Upload files <span>(PDF or image — multiple PDFs supported)</span></label>
               <div
                 className={`upload-zone ${dragOver ? 'drag-over' : ''}`}
                 onClick={() => fileRef.current?.click()}
@@ -334,14 +327,15 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
                   <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
                 <div className="upload-zone-text">
-                  {files.length === 0 ? 'Click to upload or drag and drop' : `${files.length} file${files.length > 1 ? 's' : ''} selected — click to add more`}
+                  {files.length === 0
+                    ? 'Click to upload or drag and drop'
+                    : `${files.length} file${files.length > 1 ? 's' : ''} selected — click to add more`}
                 </div>
                 <div className="upload-zone-sub">PDF, JPG, PNG, WEBP — multiple PDFs supported</div>
               </div>
               <input ref={fileRef} type="file" accept=".pdf,image/*" multiple style={{ display: 'none' }}
                 onChange={e => handleFiles(e.target.files)} />
 
-              {/* File list */}
               {files.length > 0 && (
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {files.map((f, i) => (

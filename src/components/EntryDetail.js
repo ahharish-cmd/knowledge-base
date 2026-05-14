@@ -12,6 +12,13 @@ export default function EntryDetail({ entry, session, customCats, onClose, onDel
   const isOwner = entry.created_by === session.user.id
   const catColor = getCatColor(entry.category)
 
+  // Resolve file list — prefer file_urls (new), fall back to single file_url (legacy)
+  const fileList = entry.file_urls && entry.file_urls.length > 0
+    ? entry.file_urls
+    : entry.file_url
+      ? [{ name: entry.file_name || 'File', url: entry.file_url, type: entry.file_type || '' }]
+      : []
+
   const handleDelete = async () => {
     if (!window.confirm('Delete this entry? This cannot be undone.')) return
     const { error } = await supabase.from('entries').delete().eq('id', entry.id)
@@ -96,7 +103,7 @@ export default function EntryDetail({ entry, session, customCats, onClose, onDel
 
         <div className="form-group">
           <label className="form-label">Summary</label>
-          <textarea className="form-textarea" style={{ minHeight: 100 }} value={draft.summary || ''}
+          <textarea className="form-textarea" style={{ minHeight: 120 }} value={draft.summary || ''}
             onChange={e => setDraft({...draft, summary: e.target.value})} />
         </div>
 
@@ -155,6 +162,8 @@ export default function EntryDetail({ entry, session, customCats, onClose, onDel
         <div className="detail-meta">
           {fmtDate(entry.created_at)} · {entry.source_type}
           {entry.profiles?.full_name && ` · Added by ${entry.profiles.full_name}`}
+          {entry.updated_at && (new Date(entry.updated_at) - new Date(entry.created_at)) > 60000 &&
+            ` · Edited ${fmtDate(entry.updated_at)}`}
         </div>
 
         {entry.key_insight && (
@@ -201,16 +210,25 @@ export default function EntryDetail({ entry, session, customCats, onClose, onDel
           </>
         )}
 
-        {entry.file_url && (
+        {/* Files — shows each uploaded file as a separate link */}
+        {fileList.length > 0 && (
           <>
-            <div className="detail-section-label">File</div>
-            <div className="file-preview">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-              </svg>
-              <span style={{ flex: 1 }}>{entry.file_name}</span>
-              <a href={entry.file_url} target="_blank" rel="noopener noreferrer" className="yt-link">Open ↗</a>
+            <div className="detail-section-label">
+              {fileList.length > 1 ? `Files (${fileList.length})` : 'File'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {fileList.map((f, i) => (
+                <div key={i} className="file-preview">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {f.name}
+                  </span>
+                  <a href={f.url} target="_blank" rel="noopener noreferrer" className="yt-link">Open ↗</a>
+                </div>
+              ))}
             </div>
           </>
         )}
