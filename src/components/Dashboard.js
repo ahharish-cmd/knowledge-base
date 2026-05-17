@@ -2,10 +2,16 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { CAT_ORDER, getCatColor, fmtDate } from '../lib/utils'
 import useDriveBackup from '../lib/driveBackup'
-import DriveStatusBar from './DriveStatusBar'
 import ChatPanel from './ChatPanel'
 import AddEntry from './AddEntry'
 import EntryDetail from './EntryDetail'
+
+const STATUS_CONFIG = {
+  idle:    { dot: 'var(--drive-dot)', label: 'Drive backup active' },
+  syncing: { dot: '#f59e0b', label: 'Saving to Drive...' },
+  synced:  { dot: 'var(--drive-dot)', label: 'Saved to Drive' },
+  error:   { dot: '#ef4444', label: 'Backup error' },
+}
 
 export default function Dashboard({ session }) {
   const [entries, setEntries] = useState([])
@@ -16,12 +22,37 @@ export default function Dashboard({ session }) {
   const [showAdd, setShowAdd] = useState(false)
   const [selectedEntry, setSelectedEntry] = useState(null)
   const [toast, setToast] = useState(null)
+  const [darkMode, setDarkMode] = useState(true)
 
-  const { driveStatus, driveMessage, connectDrive, pushToDrive } = useDriveBackup()
+  const { driveStatus, driveMessage, pushToDrive } = useDriveBackup()
   const profile = session.user
   const initials = profile.user_metadata?.full_name
     ? profile.user_metadata.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
     : profile.email?.[0]?.toUpperCase() || 'U'
+
+  // Apply theme to body
+  useEffect(() => {
+    if (darkMode) {
+      document.body.classList.remove('light-mode')
+    } else {
+      document.body.classList.add('light-mode')
+    }
+  }, [darkMode])
+
+  // Persist theme preference
+  useEffect(() => {
+    const saved = localStorage.getItem('kb-theme')
+    if (saved === 'light') {
+      setDarkMode(false)
+      document.body.classList.add('light-mode')
+    }
+  }, [])
+
+  const toggleTheme = () => {
+    const next = !darkMode
+    setDarkMode(next)
+    localStorage.setItem('kb-theme', next ? 'dark' : 'light')
+  }
 
   const showToast = (msg, type = 'ok') => {
     setToast({ msg, type })
@@ -49,13 +80,10 @@ export default function Dashboard({ session }) {
   useEffect(() => {
     fetchEntries()
     fetchCustomCats()
-
-    // Real-time subscription
     const channel = supabase
       .channel('entries-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'entries' }, fetchEntries)
       .subscribe()
-
     return () => supabase.removeChannel(channel)
   }, [fetchEntries, fetchCustomCats])
 
@@ -75,6 +103,7 @@ export default function Dashboard({ session }) {
   }, {})
 
   const handleSignOut = async () => {
+    document.body.classList.remove('light-mode')
     await supabase.auth.signOut()
   }
 
@@ -83,7 +112,6 @@ export default function Dashboard({ session }) {
     await fetchEntries()
     fetchCustomCats()
     showToast('Entry saved')
-    // Auto backup to Drive
     const { data } = await supabase.from('entries').select('*, profiles(full_name, avatar_url)').order('created_at', { ascending: false })
     if (data) pushToDrive(data)
   }
@@ -100,182 +128,415 @@ export default function Dashboard({ session }) {
     showToast('Entry updated')
   }
 
-  // Truncate summary for card display — full 200-word summary shown in detail view
   const truncateSummary = (text, limit = 160) => {
     if (!text) return ''
     if (text.length <= limit) return text
     return text.slice(0, limit).trimEnd() + '...'
   }
 
+  // Top tags across all entries
+  const topTags = Object.entries(
+    entries.flatMap(e => e.tags || []).reduce((acc, t) => {
+      acc[t] = (acc[t] || 0) + 1; return acc
+    }, {})
+  ).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t]) => t)
+
+  // Max entries in any category (for bar widths)
+  const maxCatCount = Math.max(...activeCats.map(c => entries.filter(e => e.category === c).length), 1)
+
+  // Today's date string
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
+  const driveStatusCfg = STATUS_CONFIG[driveStatus] || STATUS_CONFIG.idle
+  const isSyncing = driveStatus === 'syncing'
+
+  // Home view: show when filterCat is All and no search
+  const isHomeView = filterCat === 'All' && !search.trim()
+
+  // First entry per section (for featured treatment)
+  const featuredCat = activeCats[0]
+  const featuredEntry = featuredCat ? entries.find(e => e.category === featuredCat) : null
+
   return (
     <>
     <div className="app-shell">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="sidebar-logo">
-          <div className="sidebar-logo-text">Knowledge Base</div>
-          <div className="sidebar-logo-sub">Shared Library</div>
+
+      {/* ── Masthead ── */}
+      <div className="masthead">
+        <div className="masthead-left">
+          <div className="masthead-logo">Knowledge Base</div>
+          <div className="masthead-edition">
+            Shared Library<br />
+            {today} · {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+          </div>
         </div>
-
-        <nav className="sidebar-cats">
-          <div className="sidebar-section-label">Browse</div>
-          <button
-            className={`sidebar-cat ${filterCat === 'All' ? 'active' : ''}`}
-            onClick={() => setFilterCat('All')}
-          >
-            <span className="sidebar-cat-dot" style={{ background: filterCat === 'All' ? '#a51d36' : 'rgba(255,255,255,0.2)' }} />
-            All entries
-            <span className="sidebar-cat-count">{entries.length}</span>
+        <div className="masthead-right">
+          <button className="theme-toggle" onClick={toggleTheme}>
+            {darkMode ? '☀ Light' : '☾ Dark'}
           </button>
+          <button className="btn-add" onClick={() => setShowAdd(true)}>
+            + Add Entry
+          </button>
+        </div>
+      </div>
 
-          <div className="sidebar-section-label" style={{ marginTop: 8 }}>Categories</div>
-          {activeCats.map(cat => (
+      {/* ── Category nav strip ── */}
+      <div className="cat-nav">
+        <button
+          className={`cat-nav-item ${filterCat === 'All' ? 'active' : ''}`}
+          onClick={() => { setFilterCat('All'); setSearch('') }}
+        >
+          Home
+        </button>
+        {activeCats.map(cat => (
+          <button
+            key={cat}
+            className={`cat-nav-item ${filterCat === cat ? 'active' : ''}`}
+            onClick={() => setFilterCat(cat)}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Search bar ── */}
+      <div className="searchbar">
+        <div className="search-box">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            className="search-input"
+            placeholder="Search entries..."
+            value={search}
+            onChange={e => { setSearch(e.target.value); if (e.target.value) setFilterCat('All') }}
+          />
+          <span className="search-shortcut">⌘K</span>
+        </div>
+        <span className="entry-count">{filtered.length} {filtered.length === 1 ? 'entry' : 'entries'}</span>
+      </div>
+
+      {/* ── Main layout ── */}
+      <div className="layout">
+
+        {/* ── Index column ── */}
+        <div className="index-col">
+
+          <div className="index-section">
+            <div className="index-head">Browse</div>
             <button
-              key={cat}
-              className={`sidebar-cat ${filterCat === cat ? 'active' : ''}`}
-              onClick={() => setFilterCat(cat)}
+              className={`index-item ${filterCat === 'All' ? 'active' : ''}`}
+              onClick={() => { setFilterCat('All'); setSearch('') }}
             >
-              <span className="sidebar-cat-dot" style={{ background: filterCat === cat ? '#a51d36' : 'rgba(255,255,255,0.2)' }} />
-              {cat}
-              <span className="sidebar-cat-count">
-                {entries.filter(e => e.category === cat).length}
-              </span>
+              <span>All entries</span>
+              <span className="index-ct">{entries.length}</span>
             </button>
-          ))}
-        </nav>
+          </div>
 
-        <div className="sidebar-bottom">
-          <div className="sidebar-user">
-            <div className="sidebar-avatar">
+          <div className="stats-block">
+            <div>
+              <div className="stat-val">{entries.length}</div>
+              <div className="stat-label">Entries</div>
+            </div>
+            <div>
+              <div className="stat-val">{activeCats.length}</div>
+              <div className="stat-label">Categories</div>
+            </div>
+            <div>
+              <div className="stat-val">{topTags.length}</div>
+              <div className="stat-label">Tags</div>
+            </div>
+            <div>
+              <div className="stat-val">
+                {entries.filter(e => {
+                  const d = new Date(e.created_at)
+                  const now = new Date()
+                  return (now - d) < 7 * 24 * 60 * 60 * 1000
+                }).length}
+              </div>
+              <div className="stat-label">This week</div>
+            </div>
+          </div>
+
+          <div className="index-section">
+            <div className="index-head">Index</div>
+            {activeCats.map(cat => (
+              <button
+                key={cat}
+                className={`index-item ${filterCat === cat ? 'active' : ''}`}
+                onClick={() => setFilterCat(cat)}
+              >
+                <span>{cat}</span>
+                <span className="index-ct">{entries.filter(e => e.category === cat).length}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="tags-block">
+            <div className="tags-head">Top Tags</div>
+            <div className="tag-cloud">
+              {topTags.slice(0, 8).map((t, i) => (
+                <button
+                  key={t}
+                  className={`tag-pill ${i < 3 ? 'hot' : ''}`}
+                  onClick={() => { setSearch(t); setFilterCat('All') }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="recent-block">
+            <div className="recent-head">Recently Added</div>
+            {entries.slice(0, 4).map(e => (
+              <div key={e.id} className="recent-item" onClick={() => setSelectedEntry(e)}>
+                <div className="recent-title">{e.title}</div>
+                <div className="recent-meta">{e.category} · {fmtDate(e.created_at)}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="index-user">
+            <div className="index-avatar">
               {profile.user_metadata?.avatar_url
                 ? <img src={profile.user_metadata.avatar_url} alt="" />
                 : initials}
             </div>
-            <div className="sidebar-user-name">
-              {profile.user_metadata?.full_name || profile.email}
-            </div>
+            <div className="index-uname">{profile.user_metadata?.full_name || profile.email}</div>
+            <button className="btn-signout" onClick={handleSignOut}>Out</button>
           </div>
-          <button className="btn-signout" onClick={handleSignOut}>Sign out</button>
-        </div>
-      </aside>
 
-      {/* Main */}
-      <div className="main-content">
-        <div className="topbar">
-          <div className="search-box">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input
-              className="search-input"
-              placeholder="Search entries..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-          <span className="entry-count">{filtered.length} entries</span>
-          <button className="btn-add" onClick={() => setShowAdd(true)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            Add Entry
-          </button>
         </div>
 
-        <DriveStatusBar
-          driveStatus={driveStatus}
-          driveMessage={driveMessage}
-          connectDrive={connectDrive}
-          onManualBackup={async () => {
-            const { data } = await supabase.from('entries').select('*, profiles(full_name, avatar_url)').order('created_at', { ascending: false })
-            if (data) pushToDrive(data)
-          }}
-        />
-        <div className="content-area">
-          {loading ? (
-            <div className="empty-state">
-              <div className="loading-spinner" />
-            </div>
-          ) : entries.length === 0 ? (
-            <div className="empty-state">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--rule)" strokeWidth="1.5">
-                <path d="M12 2C8.5 2 6 4.5 6 7c0 1-.3 2-1 2.7C3.8 11 3 12.4 3 14c0 2.8 2.2 5 5 5h1v2h6v-2h1c2.8 0 5-2.2 5-5 0-1.6-.8-3-2-3.9-.7-.6-1-1.6-1-2.6 0-2.4-2.2-4.5-5-4.5z"/>
-              </svg>
-              <div className="empty-title">Your knowledge base is empty</div>
-              <div style={{ fontSize: 14, maxWidth: 360 }}>
-                Add your first entry — paste an article, AI conversation, YouTube URL, or upload a PDF.
-              </div>
-              <button className="btn-add" onClick={() => setShowAdd(true)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        {/* ── Main content ── */}
+        <div className="main-content">
+
+          {/* Drive status bar */}
+          <div className="drive-bar">
+            <div className="drive-dot" style={{ background: driveStatusCfg.dot, animation: isSyncing ? 'pulse 1s infinite' : 'none' }} />
+            <span className="drive-label">{driveMessage || driveStatusCfg.label}</span>
+            <button
+              className="drive-backup-btn"
+              disabled={isSyncing}
+              onClick={async () => {
+                const { data } = await supabase.from('entries').select('*, profiles(full_name, avatar_url)').order('created_at', { ascending: false })
+                if (data) pushToDrive(data)
+              }}
+            >
+              ↑ Backup now
+            </button>
+          </div>
+
+          <div className="content-area">
+
+            {loading ? (
+              <div className="empty-state"><div className="loading-spinner" /></div>
+            ) : entries.length === 0 ? (
+              <div className="empty-state">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--border-strong)" strokeWidth="1.5">
+                  <path d="M12 2C8.5 2 6 4.5 6 7c0 1-.3 2-1 2.7C3.8 11 3 12.4 3 14c0 2.8 2.2 5 5 5h1v2h6v-2h1c2.8 0 5-2.2 5-5 0-1.6-.8-3-2-3.9-.7-.6-1-1.6-1-2.6 0-2.4-2.2-4.5-5-4.5z"/>
                 </svg>
-                Add first entry
-              </button>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="empty-state">
-              <div style={{ fontSize: 15, color: 'var(--muted)' }}>No entries match your search.</div>
-            </div>
-          ) : (
-            allCats.filter(cat => grouped[cat]).map(cat => (
-              <div key={cat} className="cat-section">
-                <div className="cat-label">
-                  {cat}
-                  <span className="cat-count">({grouped[cat].length})</span>
+                <div className="empty-title">Your knowledge base is empty</div>
+                <div style={{ fontSize: 13, maxWidth: 360, color: 'var(--text-tertiary)', fontFamily: 'DM Mono, monospace', textAlign: 'center', lineHeight: 1.6 }}>
+                  Add your first entry — paste an article, YouTube URL, or upload a PDF.
                 </div>
-                <div className="entries-grid">
-                  {grouped[cat].map(entry => {
-                    const summary = entry.summary || ''
-                    const truncated = truncateSummary(summary)
-                    const isLong = summary.length > 160
-                    return (
-                      <div
-                        key={entry.id}
-                        className="entry-card"
-                        onClick={() => setSelectedEntry(entry)}
-                      >
-                        <div className="card-tags">
-                          {(entry.tags || []).slice(0, 3).map(t => (
-                            <span key={t} className="card-tag">{t}</span>
-                          ))}
+                <button className="btn-add" onClick={() => setShowAdd(true)}>+ Add first entry</button>
+              </div>
+            ) : filtered.length === 0 && search ? (
+              <div className="empty-state">
+                <div style={{ fontSize: 13, color: 'var(--text-tertiary)', fontFamily: 'DM Mono, monospace' }}>
+                  No entries match "{search}"
+                </div>
+              </div>
+            ) : isHomeView ? (
+              /* ── HOME VIEW ── */
+              <>
+                <div className="dateline">
+                  <span>{today}</span>
+                  <span>{entries.length} entries · {activeCats.length} categories · Drive {driveStatus === 'error' ? 'error' : 'active'}</span>
+                </div>
+
+                {/* Home panels: category breakdown + recent */}
+                <div className="home-panels">
+                  <div className="home-panel">
+                    <div className="home-panel-label">Category Breakdown</div>
+                    {activeCats.map(cat => (
+                      <div key={cat} className="bar-item" onClick={() => setFilterCat(cat)} style={{ cursor: 'pointer' }}>
+                        <span className="bar-name">{cat}</span>
+                        <div className="bar-track">
+                          <div className="bar-fill" style={{ width: `${(entries.filter(e => e.category === cat).length / maxCatCount) * 100}%` }} />
                         </div>
-                        <div className="card-title">{entry.title}</div>
-                        <div className="card-summary">
-                          {truncated}
-                          {isLong && (
-                            <span className="card-read-more"> Read more</span>
-                          )}
+                        <span className="bar-ct">{entries.filter(e => e.category === cat).length}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="home-panel">
+                    <div className="home-panel-label">Recently Added</div>
+                    {entries.slice(0, 5).map(e => (
+                      <div key={e.id} className="panel-recent-item" onClick={() => setSelectedEntry(e)}>
+                        <div className="panel-recent-title">{e.title}</div>
+                        <div className="panel-recent-meta">{e.category} · {fmtDate(e.created_at)} · {e.source_type}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sections with featured + grid per category */}
+                {activeCats.map(cat => {
+                  const catEntries = entries.filter(e => e.category === cat)
+                  const featured = catEntries[0]
+                  const rest = catEntries.slice(1)
+
+                  return (
+                    <div key={cat} className="cat-section">
+                      <div className="section-rule">
+                        <div className="section-bar" />
+                        <span className="section-name">{cat}</span>
+                        <span className="section-ct">({catEntries.length})</span>
+                        <div className="section-line" />
+                      </div>
+
+                      {/* Featured card */}
+                      {featured && (
+                        <div className="featured" onClick={() => setSelectedEntry(featured)}>
+                          <div className="featured-body">
+                            <div className="featured-kicker">
+                              {featured.source_type} · {fmtDate(featured.created_at)}
+                              {featured.profiles?.full_name ? ` · ${featured.profiles.full_name}` : ''}
+                            </div>
+                            <div className="featured-title">{featured.title}</div>
+                            <div className="featured-summary">{featured.summary}</div>
+                            <div className="featured-tags">
+                              {(featured.tags || []).slice(0, 4).map(t => (
+                                <span key={t} className="featured-tag">{t}</span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="featured-aside">
+                            <div>
+                              <div className="featured-insight-label">Key Insight</div>
+                              <div className="featured-insight-text">{featured.key_insight}</div>
+                            </div>
+                            <div className="featured-meta">
+                              <span>Added by {featured.profiles?.full_name || 'You'}</span>
+                              <button className="featured-open" onClick={e => { e.stopPropagation(); setSelectedEntry(featured) }}>
+                                Read full entry ↗
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="card-meta">
-                          <div className="card-dates">
-                            <span className="card-date">{fmtDate(entry.created_at)}</span>
-                            {entry.updated_at && (new Date(entry.updated_at) - new Date(entry.created_at)) > 60000 && (
-                              <span className="card-date card-modified">Edited {fmtDate(entry.updated_at)}</span>
+                      )}
+
+                      {/* Rest in grid */}
+                      {rest.length > 0 && (
+                        <div className="card-grid">
+                          {rest.map(entry => {
+                            const summary = entry.summary || ''
+                            const truncated = truncateSummary(summary)
+                            const isLong = summary.length > 160
+                            return (
+                              <div key={entry.id} className="entry-card" onClick={() => setSelectedEntry(entry)}>
+                                <div className="card-kicker">
+                                  {entry.source_type} · {fmtDate(entry.created_at)}
+                                </div>
+                                <div className="card-tags">
+                                  {(entry.tags || []).slice(0, 3).map(t => (
+                                    <span key={t} className="card-tag">{t}</span>
+                                  ))}
+                                </div>
+                                <div className="card-title">{entry.title}</div>
+                                <div className="card-summary">
+                                  {truncated}
+                                  {isLong && <span className="card-read-more"> Read more</span>}
+                                </div>
+                                <div className="card-meta">
+                                  <div className="card-dates">
+                                    <span className="card-date">{fmtDate(entry.created_at)}</span>
+                                    {entry.updated_at && (new Date(entry.updated_at) - new Date(entry.created_at)) > 60000 && (
+                                      <span className="card-modified">Edited {fmtDate(entry.updated_at)}</span>
+                                    )}
+                                  </div>
+                                  <span className="card-source">{entry.source_type}</span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </>
+            ) : (
+              /* ── FILTERED VIEW (category or search) ── */
+              <>
+                <div className="dateline">
+                  <span>{filterCat !== 'All' ? filterCat : `Search: "${search}"`}</span>
+                  <span>{filtered.length} {filtered.length === 1 ? 'entry' : 'entries'}</span>
+                </div>
+
+                {allCats.filter(cat => grouped[cat]).map(cat => (
+                  <div key={cat} className="cat-section">
+                    {filterCat === 'All' && (
+                      <div className="section-rule">
+                        <div className="section-bar" />
+                        <span className="section-name">{cat}</span>
+                        <span className="section-ct">({grouped[cat].length})</span>
+                        <div className="section-line" />
+                      </div>
+                    )}
+                    <div className="card-grid">
+                      {grouped[cat].map(entry => {
+                        const summary = entry.summary || ''
+                        const truncated = truncateSummary(summary)
+                        const isLong = summary.length > 160
+                        return (
+                          <div key={entry.id} className="entry-card" onClick={() => setSelectedEntry(entry)}>
+                            <div className="card-kicker">
+                              {entry.source_type} · {fmtDate(entry.created_at)}
+                            </div>
+                            <div className="card-tags">
+                              {(entry.tags || []).slice(0, 3).map(t => (
+                                <span key={t} className="card-tag">{t}</span>
+                              ))}
+                            </div>
+                            <div className="card-title">{entry.title}</div>
+                            <div className="card-summary">
+                              {truncated}
+                              {isLong && <span className="card-read-more"> Read more</span>}
+                            </div>
+                            <div className="card-meta">
+                              <div className="card-dates">
+                                <span className="card-date">{fmtDate(entry.created_at)}</span>
+                                {entry.updated_at && (new Date(entry.updated_at) - new Date(entry.created_at)) > 60000 && (
+                                  <span className="card-modified">Edited {fmtDate(entry.updated_at)}</span>
+                                )}
+                              </div>
+                              <span className="card-source">{entry.source_type}</span>
+                            </div>
+                            {entry.profiles?.full_name && (
+                              <div className="card-user" style={{ marginTop: 8 }}>
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                                </svg>
+                                {entry.profiles.full_name}
+                              </div>
                             )}
                           </div>
-                          <span className="card-source">
-                            {entry.source_type}
-                          </span>
-                        </div>
-                        {entry.profiles?.full_name && (
-                          <div className="card-user" style={{ marginTop: 8 }}>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                            </svg>
-                            {entry.profiles.full_name}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ))
-          )}
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Add Entry Modal */}
+      {/* Modals */}
       {showAdd && (
         <AddEntry
           session={session}
@@ -286,7 +547,6 @@ export default function Dashboard({ session }) {
         />
       )}
 
-      {/* Entry Detail Modal */}
       {selectedEntry && (
         <EntryDetail
           entry={selectedEntry}
@@ -299,17 +559,19 @@ export default function Dashboard({ session }) {
         />
       )}
 
-      {/* Toast */}
       {toast && (
         <div className={`toast ${toast.type === 'error' ? 'error' : ''}`}>{toast.msg}</div>
       )}
     </div>
-    {session && <ChatPanel
-      session={session}
-      entries={entries}
-      onEntryAdded={handleEntryAdded}
-      showToast={showToast}
-    />}
+
+    {session && (
+      <ChatPanel
+        session={session}
+        entries={entries}
+        onEntryAdded={handleEntryAdded}
+        showToast={showToast}
+      />
+    )}
     </>
   )
 }
