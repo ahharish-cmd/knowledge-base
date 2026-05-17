@@ -7,8 +7,8 @@
   --bg-searchbar:       #0D0D14;
   --bg-index:           #0D0D14;
   --bg-canvas:          #0A0A0F;
-  --bg-card:            rgba(255,255,255,0.03);
-  --bg-card-hover:      rgba(255,255,255,0.055);
+  --bg-card:            #1A1928;
+  --bg-card-hover:      #1F1E32;
   --bg-featured-aside:  rgba(99,102,241,0.05);
   --bg-stats:           rgba(99,102,241,0.05);
   --bg-panel:           rgba(255,255,255,0.02);
