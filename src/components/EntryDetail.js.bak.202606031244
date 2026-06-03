@@ -12,6 +12,7 @@ export default function EntryDetail({ entry, session, customCats, onClose, onDel
   const isOwner = entry.created_by === session.user.id
   const catColor = getCatColor(entry.category)
 
+  // Resolve file list — prefer file_urls (new), fall back to single file_url (legacy)
   const fileList = entry.file_urls && entry.file_urls.length > 0
     ? entry.file_urls
     : entry.file_url
@@ -51,7 +52,6 @@ export default function EntryDetail({ entry, session, customCats, onClose, onDel
     setNewCatInput('')
   }
 
-  // Edit mode keeps the modal pattern — narrow is fine for forms
   if (editing) return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
@@ -132,131 +132,127 @@ export default function EntryDetail({ entry, session, customCats, onClose, onDel
     </div>
   )
 
-  // Detail view — full screen panel
   return (
-    <div className="detail-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="detail-panel">
-        <div className="detail-panel-inner">
-
-          <div className="detail-panel-header">
-            <button className="btn-ghost" onClick={onClose}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="15 18 9 12 15 6"/>
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <button className="btn-ghost" onClick={onClose}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            Back
+          </button>
+          {isOwner && (
+            <button className="btn-ghost" onClick={() => setEditing(true)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
               </svg>
-              Back
+              Edit
             </button>
-            {isOwner && (
-              <button className="btn-ghost" onClick={() => setEditing(true)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                </svg>
-                Edit
-              </button>
-            )}
+          )}
+        </div>
+
+        <span className="detail-cat-badge" style={{ background: catColor.bg, color: catColor.dot }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: catColor.dot, display: 'inline-block' }} />
+          {entry.category}
+        </span>
+
+        <div className="detail-title">{entry.title}</div>
+        <div className="detail-meta">
+          {fmtDate(entry.created_at)} · {entry.source_type}
+          {entry.profiles?.full_name && ` · Added by ${entry.profiles.full_name}`}
+          {entry.updated_at && (new Date(entry.updated_at) - new Date(entry.created_at)) > 60000 &&
+            ` · Edited ${fmtDate(entry.updated_at)}`}
+        </div>
+
+        {entry.key_insight && (
+          <div className="insight-box">
+            <div className="insight-label">Key Insight</div>
+            <div className="insight-text">{entry.key_insight}</div>
           </div>
+        )}
 
-          <span className="detail-cat-badge" style={{ background: catColor.bg, color: catColor.dot }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: catColor.dot, display: 'inline-block' }} />
-            {entry.category}
-          </span>
+        {entry.summary && (
+          <>
+            <div className="detail-section-label">Summary</div>
+            <div className="detail-body" style={{ marginBottom: 0 }}>{entry.summary}</div>
+          </>
+        )}
 
-          <div className="detail-title">{entry.title}</div>
-          <div className="detail-meta">
-            {fmtDate(entry.created_at)} · {entry.source_type}
-            {entry.profiles?.full_name && ` · Added by ${entry.profiles.full_name}`}
-            {entry.updated_at && (new Date(entry.updated_at) - new Date(entry.created_at)) > 60000 &&
-              ` · Edited ${fmtDate(entry.updated_at)}`}
-          </div>
-
-          {entry.key_insight && (
-            <div className="insight-box">
-              <div className="insight-label">Key Insight</div>
-              <div className="insight-text">{entry.key_insight}</div>
+        {entry.tags?.length > 0 && (
+          <>
+            <div className="detail-section-label">Tags</div>
+            <div className="card-tags" style={{ marginBottom: 0 }}>
+              {entry.tags.map(t => <span key={t} className="card-tag" style={{ fontSize: 12, padding: '3px 10px' }}>{t}</span>)}
             </div>
-          )}
+          </>
+        )}
 
-          {entry.summary && (
-            <>
-              <div className="detail-section-label">Summary</div>
-              <div className="detail-body" style={{ marginBottom: 20 }}>{entry.summary}</div>
-            </>
-          )}
-
-          {entry.tags?.length > 0 && (
-            <>
-              <div className="detail-section-label">Tags</div>
-              <div className="card-tags" style={{ marginBottom: 16 }}>
-                {entry.tags.map(t => <span key={t} className="card-tag" style={{ fontSize: 12, padding: '3px 10px' }}>{t}</span>)}
+        {entry.youtube_id && (
+          <>
+            <div className="detail-section-label">Video</div>
+            <div className="yt-thumbnail">
+              <img src={ytThumbnail(entry.youtube_id)} alt="YouTube thumbnail" />
+              <div className="yt-bar">
+                <span>YouTube · {entry.youtube_id}</span>
+                <a className="yt-link" href={entry.youtube_url || `https://youtube.com/watch?v=${entry.youtube_id}`}
+                  target="_blank" rel="noopener noreferrer">Watch ↗</a>
               </div>
-            </>
-          )}
+            </div>
+          </>
+        )}
 
-          {entry.youtube_id && (
-            <>
-              <div className="detail-section-label">Video</div>
-              <div className="yt-thumbnail">
-                <img src={ytThumbnail(entry.youtube_id)} alt="YouTube thumbnail" />
-                <div className="yt-bar">
-                  <span>YouTube · {entry.youtube_id}</span>
-                  <a className="yt-link" href={entry.youtube_url || `https://youtube.com/watch?v=${entry.youtube_id}`}
-                    target="_blank" rel="noopener noreferrer">Watch ↗</a>
+        {entry.transcript && (
+          <>
+            <div className="detail-section-label">Transcript</div>
+            <div className="raw-content-box">{entry.transcript}</div>
+          </>
+        )}
+
+        {/* Files — shows each uploaded file as a separate link */}
+        {fileList.length > 0 && (
+          <>
+            <div className="detail-section-label">
+              {fileList.length > 1 ? `Files (${fileList.length})` : 'File'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {fileList.map((f, i) => (
+                <div key={i} className="file-preview">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {f.name}
+                  </span>
+                  <a href={f.url} target="_blank" rel="noopener noreferrer" className="yt-link">Open ↗</a>
                 </div>
-              </div>
-            </>
+              ))}
+            </div>
+          </>
+        )}
+
+        {entry.raw_content && (
+          <>
+            <div className="detail-section-label">Original Content</div>
+            <div className="raw-content-box">{entry.raw_content}</div>
+          </>
+        )}
+
+        <div className="modal-actions">
+          {isOwner ? (
+            <button className="btn-danger" onClick={handleDelete}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+              </svg>
+              Delete
+            </button>
+          ) : (
+            <span style={{ fontSize: 12, color: 'var(--rule)' }}>Added by {entry.profiles?.full_name}</span>
           )}
-
-          {entry.transcript && (
-            <>
-              <div className="detail-section-label">Transcript</div>
-              <div className="raw-content-box">{entry.transcript}</div>
-            </>
-          )}
-
-          {fileList.length > 0 && (
-            <>
-              <div className="detail-section-label">
-                {fileList.length > 1 ? `Files (${fileList.length})` : 'File'}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {fileList.map((f, i) => (
-                  <div key={i} className="file-preview">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                      <polyline points="14 2 14 8 20 8"/>
-                    </svg>
-                    <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {f.name}
-                    </span>
-                    <a href={f.url} target="_blank" rel="noopener noreferrer" className="yt-link">Open ↗</a>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {entry.raw_content && (
-            <>
-              <div className="detail-section-label">Original Content</div>
-              <div className="raw-content-box">{entry.raw_content}</div>
-            </>
-          )}
-
-          <div className="modal-actions" style={{ marginTop: 32 }}>
-            {isOwner ? (
-              <button className="btn-danger" onClick={handleDelete}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
-                </svg>
-                Delete
-              </button>
-            ) : (
-              <span style={{ fontSize: 12, color: 'var(--rule)' }}>Added by {entry.profiles?.full_name}</span>
-            )}
-            <span style={{ fontSize: 12, color: 'var(--rule)' }}>Synced across all devices</span>
-          </div>
-
+          <span style={{ fontSize: 12, color: 'var(--rule)' }}>Synced across all devices</span>
         </div>
       </div>
     </div>
