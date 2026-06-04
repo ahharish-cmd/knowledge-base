@@ -6,7 +6,6 @@ import {
   localCategorise, extractTags, detectSourceType,
   generateTitle, generateSummary, generateInsight
 } from '../lib/utils'
-import mammoth from 'mammoth'
 
 async function aiCategorise(text, imageBase64, imageMediaType) {
   try {
@@ -109,22 +108,11 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
   const isYT = isYouTubeUrl(rawInput)
   const ytId = isYT ? extractYouTubeId(rawInput) : null
 
-  const isDocx = (file) =>
-    file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    file.type === 'application/msword' ||
-    file.name.toLowerCase().endsWith('.docx') ||
-    file.name.toLowerCase().endsWith('.doc')
-
   const handleFiles = (newFiles) => {
-    const allowed = [
-      'application/pdf',
-      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/msword'
-    ]
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif']
     const valid = Array.from(newFiles).filter(f => {
-      if (!allowed.includes(f.type) && !isDocx(f)) {
-        showToast(`${f.name}: only PDF, Word, and image files supported`, 'error')
+      if (!allowed.includes(f.type)) {
+        showToast(`${f.name}: only PDF and image files supported`, 'error')
         return false
       }
       return true
@@ -170,25 +158,6 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
     })
   }
 
-  const extractDocxText = async (docxFile) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = async (e) => {
-        try {
-          const arrayBuffer = e.target.result
-          const result = await mammoth.extractRawText({ arrayBuffer })
-          const text = result.value?.trim()
-          resolve(text?.slice(0, 3000) || `Word document: ${docxFile.name}`)
-        } catch (err) {
-          console.error('Mammoth extraction failed:', err)
-          resolve(`Word document: ${docxFile.name}`)
-        }
-      }
-      reader.onerror = () => resolve(`Word document: ${docxFile.name}`)
-      reader.readAsArrayBuffer(docxFile)
-    })
-  }
-
   const processEntry = async () => {
     if (!rawInput.trim() && !files.length) return
     setProcessing(true)
@@ -198,10 +167,10 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
     let imageMediaType = null
 
     const pdfFiles = files.filter(f => f.type === 'application/pdf')
-    const docxFiles = files.filter(f => isDocx(f))
     const imageFiles = files.filter(f => f.type.startsWith('image/'))
 
     if (pdfFiles.length > 0) {
+      // Extract text from each PDF sequentially then combine
       const texts = []
       for (const f of pdfFiles) {
         const extracted = await extractPdfText(f)
@@ -209,14 +178,6 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
       }
       const combinedPdfText = texts.join('\n\n')
       textForAI = [textForAI, combinedPdfText].filter(Boolean).join('\n\n').slice(0, 6000)
-    } else if (docxFiles.length > 0) {
-      const texts = []
-      for (const f of docxFiles) {
-        const extracted = await extractDocxText(f)
-        texts.push(extracted)
-      }
-      const combinedDocxText = texts.join('\n\n')
-      textForAI = [textForAI, combinedDocxText].filter(Boolean).join('\n\n').slice(0, 6000)
     } else if (imageFiles.length > 0) {
       try {
         imageBase64 = await imageToBase64(imageFiles[0])
@@ -268,6 +229,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
   const saveEntry = async () => {
     setSaving(true)
 
+    // Upload all files individually and collect their details
     const uploadedFiles = []
     for (const f of files) {
       const ext = f.name.split('.').pop()
@@ -284,6 +246,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
       uploadedFiles.push({ name: f.name, url: publicUrl, type: f.type })
     }
 
+    // Keep file_url/file_name for backward compatibility with existing entries
     const primaryFile = uploadedFiles[0] || null
 
     const { error } = await supabase.from('entries').insert({
@@ -309,12 +272,6 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
     onAdded()
   }
 
-  const getFileIcon = (file) => {
-    if (file.type === 'application/pdf') return '📄'
-    if (isDocx(file)) return '📝'
-    return '🖼️'
-  }
-
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
@@ -332,7 +289,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
         {step === 'input' && (
           <>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>
-              Paste any text, a YouTube URL, or upload PDFs, Word docs, or images. Claude will read and categorise everything.
+              Paste any text, a YouTube URL, or upload one or more PDFs / images. Claude will read and categorise everything.
             </p>
 
             <div className="form-group">
@@ -357,7 +314,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
             )}
 
             <div className="form-group">
-              <label className="form-label">Upload files <span>(PDF, Word doc, or image — multiple supported)</span></label>
+              <label className="form-label">Upload files <span>(PDF or image — multiple PDFs supported)</span></label>
               <div
                 className={`upload-zone ${dragOver ? 'drag-over' : ''}`}
                 onClick={() => fileRef.current?.click()}
@@ -374,9 +331,9 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
                     ? 'Click to upload or drag and drop'
                     : `${files.length} file${files.length > 1 ? 's' : ''} selected — click to add more`}
                 </div>
-                <div className="upload-zone-sub">PDF, DOCX, DOC, JPG, PNG, WEBP — multiple files supported</div>
+                <div className="upload-zone-sub">PDF, JPG, PNG, WEBP — multiple PDFs supported</div>
               </div>
-              <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,image/*" multiple style={{ display: 'none' }}
+              <input ref={fileRef} type="file" accept=".pdf,image/*" multiple style={{ display: 'none' }}
                 onChange={e => handleFiles(e.target.files)} />
 
               {files.length > 0 && (
@@ -384,7 +341,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
                   {files.map((f, i) => (
                     <div key={i} className="file-preview" style={{ justifyContent: 'space-between' }}>
                       <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {getFileIcon(f)} {f.name}
+                        {f.type === 'application/pdf' ? '📄' : '🖼️'} {f.name}
                       </span>
                       <button onClick={() => removeFile(i)} style={{
                         background: 'none', border: 'none', cursor: 'pointer',
