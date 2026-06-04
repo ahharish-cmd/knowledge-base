@@ -357,35 +357,6 @@ export default function Dashboard({ session }) {
                   <span>{entries.length} entries · {activeCats.length} categories · Drive {driveStatus === 'error' ? 'error' : 'active'}</span>
                 </div>
 
-                {/* Daily Insight Card */}
-                {(() => {
-                  if (!entries.length) return null
-                  const seed = new Date().toISOString().slice(0, 10).replace(/-/g, "")
-                  const idx = parseInt(seed) % entries.length
-                  const insight = entries[idx]
-                  if (!insight) return null
-                  return (
-                    <div className="daily-insight-card" onClick={() => setSelectedEntry(insight)}>
-                      <div className="daily-insight-eyebrow">
-                        <span className="daily-insight-label">✦ Today's Insight</span>
-                        <span className="daily-insight-date">{today}</span>
-                      </div>
-                      <div className="daily-insight-category">{insight.category} · {insight.source_type}</div>
-                      <div className="daily-insight-title">{insight.title}</div>
-                      {insight.key_insight && (
-                        <div className="daily-insight-key">
-                          <span className="daily-insight-did">Did you know?</span>
-                          <span className="daily-insight-insight">{insight.key_insight}</span>
-                        </div>
-                      )}
-                      {insight.summary && (
-                        <div className="daily-insight-summary">{insight.summary.slice(0, 220)}{insight.summary.length > 220 ? '...' : ''}</div>
-                      )}
-                      <div className="daily-insight-cta">Read full entry ↗</div>
-                    </div>
-                  )
-                })()}
-
                 {/* Home panels: category breakdown + recent */}
                 <div className="home-panels">
                   <div className="home-panel">
