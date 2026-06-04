@@ -228,7 +228,7 @@ export default function EntryDetail({ entry, session, customCats, onClose, onDel
                     <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {f.name}
                     </span>
-                    <a href={f.url} target="_blank" rel="noopener noreferrer" className="yt-link">Open ↗</a>
+                    <a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" className="yt-link">Download ↓</a>
                   </div>
                 ))}
               </div>
