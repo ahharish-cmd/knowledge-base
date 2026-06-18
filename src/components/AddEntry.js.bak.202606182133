@@ -115,20 +115,16 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
     file.name.toLowerCase().endsWith('.docx') ||
     file.name.toLowerCase().endsWith('.doc')
 
-  const isVideo = (file) =>
-    file.type === 'video/mp4' || file.name.toLowerCase().endsWith('.mp4')
-
   const handleFiles = (newFiles) => {
     const allowed = [
       'application/pdf',
       'image/jpeg', 'image/png', 'image/webp', 'image/gif',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/msword',
-      'video/mp4'
+      'application/msword'
     ]
     const valid = Array.from(newFiles).filter(f => {
-      if (!allowed.includes(f.type) && !isDocx(f) && !isVideo(f)) {
-        showToast(`${f.name}: only PDF, Word, image, and MP4 files supported`, 'error')
+      if (!allowed.includes(f.type) && !isDocx(f)) {
+        showToast(`${f.name}: only PDF, Word, and image files supported`, 'error')
         return false
       }
       return true
@@ -203,28 +199,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
 
     const pdfFiles = files.filter(f => f.type === 'application/pdf')
     const docxFiles = files.filter(f => isDocx(f))
-    const videoFiles = files.filter(f => isVideo(f))
     const imageFiles = files.filter(f => f.type.startsWith('image/'))
-
-    if (videoFiles.length > 0) {
-      // No text extraction possible for video — skip AI categorisation,
-      // go straight to review with manual/empty fields for the user to fill in
-      setDraft({
-        title: rawInput.trim() || videoFiles[0].name.replace(/\.mp4$/i, ''),
-        category: 'Uncategorised',
-        summary: rawInput.trim() || '',
-        key_insight: '',
-        tags: [],
-        source_type: 'Video',
-        raw_content: rawInput.trim() || `Video: ${videoFiles[0].name}`,
-        transcript: '',
-        youtube_id: null,
-        youtube_url: null,
-      })
-      setProcessing(false)
-      setStep('review')
-      return
-    }
 
     if (pdfFiles.length > 0) {
       const texts = []
@@ -337,7 +312,6 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
   const getFileIcon = (file) => {
     if (file.type === 'application/pdf') return '📄'
     if (isDocx(file)) return '📝'
-    if (isVideo(file)) return '🎬'
     return '🖼️'
   }
 
@@ -358,7 +332,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
         {step === 'input' && (
           <>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>
-              Paste any text, a YouTube URL, or upload PDFs, Word docs, images, or MP4 videos. Claude will read and categorise text-based content; videos are reviewed manually.
+              Paste any text, a YouTube URL, or upload PDFs, Word docs, or images. Claude will read and categorise everything.
             </p>
 
             <div className="form-group">
@@ -383,7 +357,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
             )}
 
             <div className="form-group">
-              <label className="form-label">Upload files <span>(PDF, Word doc, image, or MP4 — multiple supported)</span></label>
+              <label className="form-label">Upload files <span>(PDF, Word doc, or image — multiple supported)</span></label>
               <div
                 className={`upload-zone ${dragOver ? 'drag-over' : ''}`}
                 onClick={() => fileRef.current?.click()}
@@ -400,9 +374,9 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
                     ? 'Click to upload or drag and drop'
                     : `${files.length} file${files.length > 1 ? 's' : ''} selected — click to add more`}
                 </div>
-                <div className="upload-zone-sub">PDF, DOCX, DOC, JPG, PNG, WEBP, MP4 — multiple files supported</div>
+                <div className="upload-zone-sub">PDF, DOCX, DOC, JPG, PNG, WEBP — multiple files supported</div>
               </div>
-              <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.mp4,image/*,video/mp4" multiple style={{ display: 'none' }}
+              <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,image/*" multiple style={{ display: 'none' }}
                 onChange={e => handleFiles(e.target.files)} />
 
               {files.length > 0 && (
@@ -445,9 +419,7 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
         {step === 'review' && draft && (
           <>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>
-              {draft.source_type === 'Video' && files.some(f => isVideo(f))
-                ? 'Videos are not auto-read — please fill in the details below.'
-                : 'Auto-filled by Claude. Edit anything before saving.'}
+              Auto-filled by Claude. Edit anything before saving.
             </p>
 
             <div className="form-group">
@@ -482,14 +454,6 @@ export default function AddEntry({ session, customCats, onClose, onAdded, showTo
                 <div className="new-cat-note">Saved permanently, visible to all users.</div>
               </div>
             )}
-
-            <div className="form-group">
-              <label className="form-label">Summary</label>
-              <textarea className="form-textarea" style={{ minHeight: 100 }}
-                placeholder="Write a short summary of the video..."
-                value={draft.summary || ''}
-                onChange={e => setDraft({...draft, summary: e.target.value})} />
-            </div>
 
             <div className="form-group">
               <label className="form-label">Key Insight</label>
